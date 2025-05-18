@@ -1,0 +1,30 @@
+{
+  "name": "@primeos/core-precision-cache",
+  "version": "1.0.0",
+  "description": "High-performance caching system for PrimeOS precision operations",
+  "main": "index.ts",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@primeos/os-model": "file:../../../os/model",
+    "@primeos/os-logging": "file:../../../os/logging"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "cache",
+    "performance",
+    "precision",
+    "primeos",
+    "memory"
+  ],
+  "author": "PrimeOS Team",
+  "license": "MIT"
+}

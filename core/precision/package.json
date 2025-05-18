@@ -1,0 +1,70 @@
+{
+  "name": "@primeos/core/precision",
+  "version": "1.0.0",
+  "description": "Precision-enhanced mathematical operations for PrimeOS",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .ts",
+    "docs": "typedoc --out docs src",
+    "clean": "rimraf dist coverage docs",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "primeos",
+    "precision",
+    "bigint",
+    "modular-arithmetic",
+    "checksums",
+    "verification"
+  ],
+  "author": "PrimeOS Team",
+  "license": "MIT",
+  "dependencies": {
+    "@primeos/core/prime": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.15.0",
+    "@typescript-eslint/eslint-plugin": "^5.54.0",
+    "@typescript-eslint/parser": "^5.54.0",
+    "eslint": "^8.35.0",
+    "jest": "^29.5.0",
+    "rimraf": "^4.4.0",
+    "ts-jest": "^29.1.0",
+    "typedoc": "^0.24.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/primeos/core.git"
+  },
+  "bugs": {
+    "url": "https://github.com/primeos/core/issues"
+  },
+  "homepage": "https://primeos.org",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/*.test.ts"
+    ],
+    "collectCoverageFrom": [
+      "**/*.ts",
+      "!**/*.d.ts",
+      "!**/node_modules/**",
+      "!**/dist/**"
+    ]
+  }
+}

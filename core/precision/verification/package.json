@@ -1,0 +1,20 @@
+{
+  "name": "verification",
+  "version": "0.1.0",
+  "description": "Verification implementation for PrimeOS",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts"
+  },
+  "keywords": [
+    "primeos",
+    "verification"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "precision": "^0.1.0"
+  }
+}

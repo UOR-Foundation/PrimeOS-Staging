@@ -1,0 +1,20 @@
+{
+  "name": "prime",
+  "version": "0.1.0",
+  "description": "Prime implementation for PrimeOS",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts"
+  },
+  "keywords": [
+    "primeos",
+    "prime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "primeos": "^0.1.0"
+  }
+}

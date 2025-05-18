@@ -1,0 +1,173 @@
+/**
+ * Precision Module - Main Entry Point
+ * ===================================
+ *
+ * This file is the main entry point for the precision module, which provides
+ * mathematical operations with enhanced precision for the PrimeOS ecosystem.
+ */
+
+// Import utils module (this needs to be first as others may depend on it)
+import * as utilsModule from './utils';
+export {
+  // Utility functions
+  bitLength as utilBitLength,
+  exactlyEquals as utilExactlyEquals,
+  toByteArray as utilToByteArray,
+  fromByteArray as utilFromByteArray,
+  isSafeInteger,
+  sign,
+  abs,
+  isPowerOfTwo,
+  // Class and factory
+  MathUtils,
+  createMathUtils
+} from './utils';
+
+// Import and re-export from the bigint module
+import * as bigintModule from './bigint';
+export {
+  // Core BigInt operations
+  BIGINT_CONSTANTS,
+  BigIntOperations,
+  bitLength,
+  exactlyEquals,
+  toByteArray,
+  fromByteArray,
+  getRandomBigInt,
+  isProbablePrime,
+  countLeadingZeros,
+  countTrailingZeros,
+  getBit,
+  setBit
+} from './bigint';
+
+// Import and re-export from the modular module
+import * as modularModule from './modular';
+export {
+  // Core modular operations
+  mod,
+  modPow,
+  modInverse
+} from './modular';
+
+// Import and re-export from the checksums module
+import * as checksumsModule from './checksums';
+export {
+  // Checksum operations
+  ChecksumsImplementation,
+  calculateChecksum,
+  extractFactorsAndChecksum,
+  attachChecksum,
+  calculateBatchChecksum
+} from './checksums';
+
+// Import and re-export from the verification module
+import * as verificationModule from './verification';
+export {
+  // Verification operations
+  verifyValue,
+  createOptimizedVerifier,
+  VerificationContext,
+  createVerification,
+  VerificationStatus
+} from './verification';
+
+// Import and re-export common types
+export * from './types';
+
+/**
+ * Create a unified math utilities object that combines all functionality
+ */
+export const MathUtilities = {
+  // BigInt operations
+  bitLength: bigintModule.bitLength,
+  exactlyEquals: bigintModule.exactlyEquals,
+  toByteArray: bigintModule.toByteArray,
+  fromByteArray: bigintModule.fromByteArray,
+  getRandomBigInt: bigintModule.getRandomBigInt,
+  isProbablePrime: bigintModule.isProbablePrime,
+  
+  // Modular arithmetic
+  mod: modularModule.mod,
+  modPow: modularModule.modPow,
+  modInverse: modularModule.modInverse,
+  
+  // Checksum operations
+  calculateChecksum: checksumsModule.calculateChecksum,
+  verifyChecksum: (value: bigint, primeRegistry: any) => {
+    try {
+      verificationModule.verifyValue(value, primeRegistry);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+  
+  // Utility operations
+  utilBitLength: utilsModule.bitLength,
+  utilExactlyEquals: utilsModule.exactlyEquals,
+  utilToByteArray: utilsModule.toByteArray,
+  utilFromByteArray: utilsModule.fromByteArray,
+  isSafeInteger: utilsModule.isSafeInteger,
+  sign: utilsModule.sign,
+  abs: utilsModule.abs,
+  isPowerOfTwo: utilsModule.isPowerOfTwo
+};
+
+/**
+ * PrecisionConfiguration contains all options for the precision module
+ */
+export interface PrecisionConfiguration {
+  /**
+   * Debug mode will log extra information
+   */
+  debug?: boolean;
+  
+  /**
+   * Enable caching for improved performance
+   */
+  enableCaching?: boolean;
+  
+  /**
+   * Match Python's modular arithmetic semantics exactly
+   */
+  pythonCompatible?: boolean;
+  
+  /**
+   * Checksum power (exponent) to use for checksums
+   */
+  checksumPower?: number;
+}
+
+/**
+ * Create a precision module with the specified configuration
+ */
+export function createPrecision(config: PrecisionConfiguration = {}) {
+  // Create a unified interface that includes all operations
+  return {
+    // Include all modules
+    bigint: bigintModule,
+    modular: modularModule,
+    checksums: checksumsModule,
+    verification: verificationModule,
+    utils: utilsModule,
+    
+    // Include the consolidated utilities
+    MathUtilities,
+    
+    // Provide module configuration
+    config
+  };
+}
+
+/**
+ * Default precision module instance with standard configuration
+ */
+export const precision = createPrecision();
+
+/**
+ * Return the version of the precision module
+ */
+export function getVersion(): string {
+  return "1.0.0";
+}

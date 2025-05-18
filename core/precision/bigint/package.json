@@ -1,0 +1,39 @@
+{
+  "name": "@primeos/core/precision/bigint",
+  "version": "1.0.0",
+  "description": "Enhanced BigInt operations for PrimeOS precision system",
+  "main": "index.ts",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@primeos/os/model": "^1.0.0",
+    "@primeos/os/logging": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.0.5",
+    "typescript": "^5.0.0",
+    "eslint": "^8.38.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.0",
+    "@typescript-eslint/parser": "^5.59.0"
+  },
+  "keywords": [
+    "primeos",
+    "precision",
+    "bigint",
+    "math",
+    "prime",
+    "number-theory"
+  ],
+  "author": "PrimeOS Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/primeos/primeos.git",
+    "directory": "core/precision/bigint"
+  }
+}

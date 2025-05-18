@@ -1,0 +1,30 @@
+{
+  "name": "@primeos/os-tests",
+  "version": "0.1.0",
+  "description": "A standardized testing framework for PrimeOS applications",
+  "main": "index.ts",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "keywords": [
+    "primeos",
+    "os-tests",
+    "testing",
+    "mock"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@primeos/core": "file:../../"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.3",
+    "jest": "^29.6.2",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.1.6"
+  }
+}
