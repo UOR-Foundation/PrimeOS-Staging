@@ -54,25 +54,27 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     
     // Handle both bigint and number types
     if (typeof a === 'number' && typeof b === 'number') {
+      const modulus = Math.abs(b);
       // Fast path for regular numbers
-      if (b === 0) {
+      if (modulus === 0) {
         const error = new Error('Division by zero in modulo operation');
         if (config.debug) {
           console.error('Error in mod:', error);
         }
         throw error;
       }
-      
+
       if (config.pythonCompatible) {
-        return ((a % b) + b) % b;
+        return ((a % modulus) + modulus) % modulus;
       }
-      return a % b;
+      return a % modulus;
     }
     
     // Convert to BigInt for consistent handling
     const aBig = BigInt(a);
-    const bBig = BigInt(b);
-    
+    let bBig = BigInt(b);
+    if (bBig < 0n) bBig = -bBig;
+
     if (bBig === 0n) {
       const error = new Error('Division by zero in modulo operation');
       if (config.debug) {
@@ -84,7 +86,7 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     // Check operation size in strict mode
     if (config.strict) {
       const aBits = bigintBitLength(aBig < 0n ? -aBig : aBig);
-      const bBits = bigintBitLength(bBig < 0n ? -bBig : bBig);
+      const bBits = bigintBitLength(bBig);
       
       if (Math.max(aBits, bBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
         const error = new Error(
@@ -125,7 +127,8 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     // Convert to BigInt for consistent handling
     const aBig = BigInt(a);
     const bBig = BigInt(b);
-    const mBig = BigInt(m);
+    let mBig = BigInt(m);
+    if (mBig < 0n) mBig = -mBig;
     
     if (mBig === 0n) {
       const error = new Error('Division by zero in modular multiplication');
@@ -139,7 +142,7 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     if (config.strict) {
       const aBits = bigintBitLength(aBig < 0n ? -aBig : aBig);
       const bBits = bigintBitLength(bBig < 0n ? -bBig : bBig);
-      const mBits = bigintBitLength(mBig < 0n ? -mBig : mBig);
+      const mBits = bigintBitLength(mBig);
       
       if (Math.max(aBits, bBits, mBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
         const error = new Error(
@@ -383,7 +386,8 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     // Convert to BigInt for consistent handling
     let baseBig = BigInt(base);
     let expBig = BigInt(exponent);
-    const modBig = BigInt(modulus);
+    let modBig = BigInt(modulus);
+    if (modBig < 0n) modBig = -modBig;
     
     if (modBig === 0n) {
       const error = new Error('Division by zero in modular exponentiation');
@@ -485,7 +489,8 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     
     // Convert to BigInt for consistent handling
     const aBig = BigInt(a);
-    const mBig = BigInt(m);
+    let mBig = BigInt(m);
+    if (mBig < 0n) mBig = -mBig;
     
     // Check for zero
     if (aBig === 0n || mBig === 0n) {
@@ -499,7 +504,7 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
     // Check operation size in strict mode
     if (config.strict) {
       const aBits = bigintBitLength(aBig < 0n ? -aBig : aBig);
-      const mBits = bigintBitLength(mBig < 0n ? -mBig : mBig);
+      const mBits = bigintBitLength(mBig);
       
       if (Math.max(aBits, mBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
         const error = new Error(
