@@ -20,8 +20,8 @@ import {
   CacheModelInterface
 } from '../types';
 
-import { ModelResult, ModelLifecycleState } from './os-model-mock';
-import { createLogging } from './os-logging-mock';
+import { ModelResult, ModelLifecycleState } from '../../../../os/model/types';
+import { createLoggingMock, createLogging } from './os-logging-mock';
 
 // Default cache metrics
 const DEFAULT_METRICS: CacheMetrics = {
@@ -173,34 +173,34 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
           
           switch (request.operation) {
             case 'get':
-              result = this.get(request.key);
+              result = this.get?.(request.key);
               break;
             case 'set':
-              result = this.set(request.key, request.value, request.options);
+              result = this.set?.(request.key, request.value);
               break;
             case 'has':
-              result = this.has(request.key);
+              result = this.has?.(request.key);
               break;
             case 'delete':
-              result = this.delete(request.key);
+              result = this.delete?.(request.key);
               break;
             case 'clear':
-              this.clear();
+              this.clear?.();
               result = true;
               break;
             case 'getMetrics':
-              result = this.getMetrics();
+              result = this.getMetrics?.();
               break;
             case 'optimize':
-              this.optimize();
+              this.optimize?.();
               result = true;
               break;
             case 'setMaxSize':
-              this.setMaxSize(request.param);
+              this.setMaxSize?.(request.param);
               result = true;
               break;
             case 'setMaxAge':
-              this.setMaxAge(request.param);
+              this.setMaxAge?.(request.param);
               result = true;
               break;
             default:
@@ -224,7 +224,7 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
     },
     
     async reset() {
-      this.clear();
+      this.clear?.();
       
       // Reset metrics
       Object.assign(metrics, {
@@ -270,5 +270,112 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
   };
 }
 
+/**
+ * Create a cache instance with the specified options - alias for createMockCache
+ */
+export function createCache<K = any, V = any>(options: CacheOptions = {}): CacheModelInterface<K, V> {
+  return createMockCache(options) as CacheModelInterface<K, V>;
+}
+
+/**
+ * Create and initialize a cache in a single step
+ */
+export async function createAndInitializeCache<K = any, V = any>(
+  options: CacheOptions = {}
+): Promise<CacheModelInterface<K, V>> {
+  const instance = createMockCache(options) as CacheModelInterface<K, V>;
+  // Ensure TypeScript knows initialize exists
+  if (instance.initialize) {
+    await instance.initialize();
+  }
+  return instance;
+}
+
+/**
+ * Create an LRU cache
+ */
+export function createLRUCache<K = any, V = any>(
+  maxSize: number = 1000,
+  options: Partial<CacheOptions> = {}
+): CacheModelInterface<K, V> {
+  return createMockCache({
+    ...options,
+    maxSize,
+    strategy: 'lru'
+  }) as CacheModelInterface<K, V>;
+}
+
+/**
+ * Create an LFU cache
+ */
+export function createLFUCache<K = any, V = any>(
+  maxSize: number = 1000,
+  options: Partial<CacheOptions> = {}
+): CacheModelInterface<K, V> {
+  return createMockCache({
+    ...options,
+    maxSize,
+    strategy: 'lfu'
+  }) as CacheModelInterface<K, V>;
+}
+
+/**
+ * Create a time-based cache
+ */
+export function createTimeBasedCache<K = any, V = any>(
+  maxAge: number,
+  maxSize: number = 1000,
+  options: Partial<CacheOptions> = {}
+): CacheModelInterface<K, V> {
+  return createMockCache({
+    ...options,
+    maxSize,
+    maxAge,
+    strategy: 'time'
+  }) as CacheModelInterface<K, V>;
+}
+
+/**
+ * Create a composite cache with multiple strategies
+ */
+export function createCompositeCache<K = any, V = any>(
+  strategies: Array<{type: 'lru' | 'lfu' | 'time', weight?: number}>,
+  maxSize: number = 1000,
+  options: Partial<CacheOptions> = {}
+): CacheModelInterface<K, V> {
+  return createMockCache({
+    ...options,
+    maxSize,
+    strategy: 'composite',
+    strategyOptions: { strategies }
+  }) as CacheModelInterface<K, V>;
+}
+
+/**
+ * Utility function for memoizing function results
+ */
+export function memoize<T extends (...args: any[]) => any>(
+  fn: T,
+  options: Partial<CacheOptions> = {}
+): T {
+  // Simple mock implementation that just returns the original function
+  return fn;
+}
+
+/**
+ * Utility function for memoizing async function results
+ */
+export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  options: Partial<CacheOptions> = {}
+): T {
+  // Simple mock implementation that just returns the original function
+  return fn;
+}
+
 // Export constants
 export { DEFAULT_METRICS };
+
+// Re-export types from the actual module
+export * from '../types';
+export * from '../strategies/types';

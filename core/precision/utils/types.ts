@@ -3,7 +3,16 @@
  * ============
  * 
  * Type definitions for utility functions in the precision module.
+ * Implements the PrimeOS Model interface pattern for consistent lifecycle management.
  */
+
+import {
+  ModelOptions,
+  ModelInterface,
+  ModelResult,
+  ModelState,
+  ModelLifecycleState
+} from '../../../os/model';
 
 /**
  * Options for mathematical utility operations
@@ -103,7 +112,97 @@ export interface MathUtilsInterface {
    * Check if a number is a power of 2
    */
   isPowerOfTwo: PowerOfTwoFunction;
+  
+  /**
+   * Calculate the greatest common divisor of two numbers
+   */
+  gcd: GcdFunction;
+  
+  /**
+   * Calculate the least common multiple of two numbers
+   */
+  lcm: LcmFunction;
+  
+  /**
+   * Extended Euclidean algorithm to find Bézout coefficients
+   */
+  extendedGcd: ExtendedGcdFunction;
+  
+  /**
+   * Calculate the integer square root of a number
+   */
+  integerSqrt: IntegerSqrtFunction;
+  
+  /**
+   * Ceiling division (rounds up the result of a/b)
+   */
+  ceilDiv: CeilDivFunction;
+  
+  /**
+   * Floor division (rounds down the result of a/b)
+   */
+  floorDiv: FloorDivFunction;
+  
+  /**
+   * Count the number of set bits (1s) in a number
+   */
+  countSetBits: CountSetBitsFunction;
+  
+  /**
+   * Count the number of leading zeros in the binary representation
+   */
+  leadingZeros: LeadingZerosFunction;
+  
+  /**
+   * Count the number of trailing zeros in the binary representation
+   */
+  trailingZeros: TrailingZerosFunction;
 }
+
+/**
+ * Function signature for GCD calculation
+ */
+export type GcdFunction = (a: bigint | number, b: bigint | number) => bigint | number;
+
+/**
+ * Function signature for LCM calculation
+ */
+export type LcmFunction = (a: bigint | number, b: bigint | number) => bigint | number;
+
+/**
+ * Function signature for extended GCD calculation
+ */
+export type ExtendedGcdFunction = (a: bigint | number, b: bigint | number) => [bigint, bigint, bigint];
+
+/**
+ * Function signature for integer square root
+ */
+export type IntegerSqrtFunction = (value: bigint | number) => bigint | number;
+
+/**
+ * Function signature for ceiling division
+ */
+export type CeilDivFunction = (a: bigint | number, b: bigint | number) => bigint | number;
+
+/**
+ * Function signature for floor division
+ */
+export type FloorDivFunction = (a: bigint | number, b: bigint | number) => bigint | number;
+
+/**
+ * Function signature for counting set bits
+ */
+export type CountSetBitsFunction = (value: bigint | number) => number;
+
+/**
+ * Function signature for counting leading zeros
+ */
+export type LeadingZerosFunction = (value: bigint | number) => number;
+
+/**
+ * Function signature for counting trailing zeros
+ */
+export type TrailingZerosFunction = (value: bigint | number) => number;
 
 /**
  * Constants for utility functions
@@ -134,3 +233,63 @@ export const UTILITY_CONSTANTS = {
  * Function to create a MathUtils instance with custom options
  */
 export type MathUtilsFactory = (options?: UtilityOptions) => MathUtilsInterface;
+
+/**
+ * Combined options for MathUtils with ModelOptions
+ */
+export interface MathUtilsModelOptions extends ModelOptions, UtilityOptions {
+  /**
+   * Enable caching for expensive operations
+   */
+  enableCache?: boolean;
+  
+  /**
+   * Whether to use optimized implementations
+   */
+  useOptimized?: boolean;
+  
+  /**
+   * Throw on overflow/underflow instead of silent wrapping
+   */
+  strict?: boolean;
+}
+
+/**
+ * Extended state for MathUtils module
+ */
+export interface MathUtilsModelState extends ModelState {
+  /**
+   * Configuration settings
+   */
+  config: MathUtilsModelOptions;
+  
+  /**
+   * Cache statistics (if caching is enabled)
+   */
+  cache?: {
+    bitLengthCacheSize: number;
+    bitLengthCacheHits: number;
+    bitLengthCacheMisses: number;
+  };
+}
+
+/**
+ * Input types for MathUtils module processing
+ */
+export interface MathUtilsProcessInput {
+  operation: 'bitLength' | 'exactlyEquals' | 'toByteArray' | 'fromByteArray' | 
+             'isSafeInteger' | 'sign' | 'abs' | 'isPowerOfTwo' |
+             'gcd' | 'lcm' | 'extendedGcd' | 'integerSqrt' |
+             'ceilDiv' | 'floorDiv' | 'countSetBits' | 'leadingZeros' | 'trailingZeros';
+  params: any[];
+}
+
+/**
+ * Interface extending ModelInterface for MathUtils module
+ */
+export interface MathUtilsModelInterface extends MathUtilsInterface, ModelInterface {
+  /**
+   * Get the module state including cache statistics
+   */
+  getState(): MathUtilsModelState;
+}

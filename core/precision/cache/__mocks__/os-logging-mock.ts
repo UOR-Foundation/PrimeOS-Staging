@@ -1,24 +1,12 @@
 /**
- * OS Logging Mock
- * This file re-exports the enhanced logging mock from os/logging/__mocks__
+ * OS Logging Mock for Cache Module
+ * 
+ * This file re-exports the logging mock from the utils/__mocks__ directory
+ * to maintain consistency across precision modules.
  */
 
-// Import the interface from the types file
-import { LoggingInterface } from '../../../../os/logging/types';
+// Re-export everything from the utils/__mocks__ directory
+export * from '../../utils/__mocks__/os-logging-mock';
 
-// Import the mock implementation
-import {
-  LogLevel,
-  LogEntry,
-  LoggingOptions,
-  createLogging
-} from '../../../../os/logging/__mocks__';
-
-// Re-export everything
-export {
-  LogLevel,
-  LogEntry,
-  LoggingOptions,
-  LoggingInterface,
-  createLogging
-};
+// Re-export createLogging from the actual logging module for compatibility
+export { createLogging } from '../../../../os/logging';
