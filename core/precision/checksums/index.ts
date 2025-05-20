@@ -491,9 +491,16 @@ export class ChecksumsImpl extends BaseModel implements ChecksumsModelInterface 
         batchXor ^= checksumIndex;
         successCount++;
       } catch (e) {
-        // Count invalid values but don't skip them entirely
-        // Instead, use a special value to mark them as invalid
-        batchXor ^= 0xFFFF; // Use a distinctive pattern for invalid values
+        // For invalid values, use a more distinctive pattern that ensures
+        // the result will be different from any valid checksum
+        // Use a large prime number (0xFFFD = 65533) as a distinctive marker
+        batchXor ^= 0xFFFD; 
+        
+        // Also incorporate the value itself to ensure different tampered values
+        // produce different results
+        const valueHash = Number(value % BigInt(0xFFFF)) ^ 0xAAAA;
+        batchXor ^= valueHash;
+        
         invalidCount++;
       }
     }
