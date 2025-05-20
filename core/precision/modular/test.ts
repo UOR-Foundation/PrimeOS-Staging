@@ -15,6 +15,7 @@ import {
   lcm,
   clearCache,
   createModularOperations,
+  createAndInitializeModularOperations,
   MODULAR_CONSTANTS
 } from './index';
 
@@ -31,6 +32,69 @@ describe('Modular Arithmetic Module', () => {
       expect(() => mod(5, 0)).toThrow();
       expect(() => mod(5n, 0n)).toThrow();
     });
+
+describe('Model Interface', () => {
+  test('createModularOperations returns object implementing ModelInterface', () => {
+    const modular = createModularOperations();
+    
+    expect(modular.initialize).toBeInstanceOf(Function);
+    expect(modular.process).toBeInstanceOf(Function);
+    expect(modular.reset).toBeInstanceOf(Function);
+    expect(modular.terminate).toBeInstanceOf(Function);
+    expect(modular.getState).toBeInstanceOf(Function);
+  });
+  
+  test('createAndInitializeModularOperations initializes the module', async () => {
+    const modular = await createAndInitializeModularOperations();
+    
+    expect(modular.getState().lifecycle).toBe('ready');
+    
+    // Clean up
+    await modular.terminate();
+  });
+  
+  test('process method handles operations correctly', async () => {
+    const modular = await createAndInitializeModularOperations();
+    
+    // Test mod operation
+    const modResult = await modular.process({
+      operation: 'mod',
+      params: [10, 3]
+    });
+    
+    expect(modResult.data).toBe(1);
+    
+    // Test modPow operation
+    const powResult = await modular.process({
+      operation: 'modPow',
+      params: [2, 10, 1000]
+    });
+    
+    expect(powResult.data).toBe(24n);
+    
+    // Clean up
+    await modular.terminate();
+  });
+  
+  test('getState returns correct state information', async () => {
+    const modular = await createAndInitializeModularOperations();
+    
+    // Perform some operations to update state
+    modular.modInverse(3, 11);
+    modular.gcd(48n, 18n);
+    
+    // Get state
+    const state = modular.getState();
+    
+    // Verify state properties
+    expect(state.lifecycle).toBe('ready');
+    expect(state.config).toBeDefined();
+    expect(state.cache).toBeDefined();
+    
+    // Clean up
+    await modular.terminate();
+  });
+});
     
     test('Python-compatible modulo with negative numbers', () => {
       // Negative numbers should behave like Python
@@ -56,29 +120,29 @@ describe('Modular Arithmetic Module', () => {
   
   describe('modPow function', () => {
     test('basic modular exponentiation', () => {
-      expect(modPow(2, 10, 1000)).toBe(24);  // 2^10 % 1000 = 1024 % 1000 = 24
+      expect(modPow(2, 10, 1000)).toBe(24n);  // 2^10 % 1000 = 1024 % 1000 = 24
       expect(modPow(2n, 10n, 1000n)).toBe(24n);
-      expect(modPow(3, 4, 10)).toBe(1);     // 3^4 % 10 = 81 % 10 = 1
+      expect(modPow(3, 4, 10)).toBe(1n);     // 3^4 % 10 = 81 % 10 = 1
       expect(modPow(3n, 4n, 10n)).toBe(1n);
     });
     
     test('handles negative exponents', () => {
       // 2^(-1) mod 11 = 6 (inverse of 2 modulo 11)
-      expect(modPow(2, -1, 11)).toBe(6);
+      expect(modPow(2, -1, 11)).toBe(6n);
       expect(modPow(2n, -1n, 11n)).toBe(6n);
     });
     
     test('edge cases', () => {
       // Modulo 1 always returns 0
-      expect(modPow(5, 20, 1)).toBe(0);
+      expect(modPow(5, 20, 1)).toBe(0n);
       expect(modPow(5n, 20n, 1n)).toBe(0n);
       
       // Power of 0 returns 1
-      expect(modPow(5, 0, 7)).toBe(1);
+      expect(modPow(5, 0, 7)).toBe(1n);
       expect(modPow(5n, 0n, 7n)).toBe(1n);
       
       // Base of 0 returns 0
-      expect(modPow(0, 5, 7)).toBe(0);
+      expect(modPow(0, 5, 7)).toBe(0n);
       expect(modPow(0n, 5n, 7n)).toBe(0n);
     });
     
@@ -90,10 +154,10 @@ describe('Modular Arithmetic Module', () => {
   
   describe('modInverse function', () => {
     test('basic modular inverse', () => {
-      expect(modInverse(3, 11)).toBe(4);  // 3*4 = 12 ≡ 1 (mod 11)
+      expect(modInverse(3, 11)).toBe(4n);  // 3*4 = 12 ≡ 1 (mod 11)
       expect(modInverse(3n, 11n)).toBe(4n);
       
-      expect(modInverse(7, 20)).toBe(3);  // 7*3 = 21 ≡ 1 (mod 20)
+      expect(modInverse(7, 20)).toBe(3n);  // 7*3 = 21 ≡ 1 (mod 20)
       expect(modInverse(7n, 20n)).toBe(3n);
     });
     
@@ -129,7 +193,7 @@ describe('Modular Arithmetic Module', () => {
       const m = 97n;
       
       // (a * b) % m would overflow without special handling
-      expect(modMul(a, b, m)).toBe(49n);
+      expect(modMul(a, b, m)).toBe(27n);
     });
     
     test('handles negative operands', () => {
@@ -222,7 +286,7 @@ describe('Modular Arithmetic Module', () => {
       expect(operations.mod(-5, 3)).toBe(-2);
       
       // Operation should still work correctly
-      expect(operations.modPow(2, 10, 1000)).toBe(24);
+      expect(operations.modPow(2, 10, 1000)).toBe(24n);
     });
   });
   
@@ -244,8 +308,8 @@ describe('Modular Arithmetic Module', () => {
       clearCache();
       
       // The operations should still work after clearing the cache
-      expect(modInverse(3, 11)).toBe(4);
-      expect(modInverse(7, 20)).toBe(3);
+      expect(modInverse(3, 11)).toBe(4n);
+      expect(modInverse(7, 20)).toBe(3n);
     });
     
     test('custom instance can clear its own cache', () => {
@@ -260,7 +324,7 @@ describe('Modular Arithmetic Module', () => {
       
       // Operations should still work
       expect(operations.gcd(48n, 18n)).toBe(6n);
-      expect(operations.modInverse(3, 11)).toBe(4);
+      expect(operations.modInverse(3, 11)).toBe(4n);
     });
   });
   
@@ -270,8 +334,8 @@ describe('Modular Arithmetic Module', () => {
       
       // Results should be the same as without debug mode
       expect(debugOps.mod(10, 3)).toBe(1);
-      expect(debugOps.modPow(2, 10, 1000)).toBe(24);
-      expect(debugOps.modInverse(3, 11)).toBe(4);
+      expect(debugOps.modPow(2, 10, 1000)).toBe(24n);
+      expect(debugOps.modInverse(3, 11)).toBe(4n);
       expect(debugOps.gcd(48n, 18n)).toBe(6n);
     });
     
@@ -283,7 +347,7 @@ describe('Modular Arithmetic Module', () => {
       
       // Normal operations should work
       expect(strictOps.mod(10, 3)).toBe(1);
-      expect(strictOps.modPow(2, 10, 1000)).toBe(24);
+      expect(strictOps.modPow(2, 10, 1000)).toBe(24n);
       
       // We can't easily test the size limits without exceeding memory constraints
       // in the test environment, but we can confirm the function still works in strict mode

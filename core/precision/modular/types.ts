@@ -6,10 +6,18 @@
  * Python-compatible modular operations.
  */
 
+import {
+  ModelOptions,
+  ModelInterface,
+  ModelResult,
+  ModelState,
+  ModelLifecycleState
+} from '../../../os/model';
+
 /**
  * Options for modular arithmetic operations
  */
-export interface ModularOptions {
+export interface ModularOptions extends ModelOptions {
   /**
    * Whether to use Python-compatible modulo semantics for negative numbers
    * When true: mod(-5, 3) = 1 (like Python)
@@ -42,6 +50,37 @@ export interface ModularOptions {
    * Enable debug logging for detailed operation information
    */
   debug?: boolean;
+}
+
+/**
+ * Extended state for Modular module
+ */
+export interface ModularState extends ModelState {
+  /**
+   * Configuration settings
+   */
+  config: ModularOptions;
+  
+  /**
+   * Cache statistics (if caching is enabled)
+   */
+  cache?: {
+    inverseSize: number;
+    inverseHits: number;
+    inverseMisses: number;
+    gcdSize: number;
+    gcdHits: number;
+    gcdMisses: number;
+  };
+}
+
+/**
+ * Input types for Modular module processing
+ */
+export interface ModularProcessInput {
+  operation: 'mod' | 'modPow' | 'modInverse' | 'modMul' | 
+             'gcd' | 'lcm' | 'extendedGcd' | 'clearCache';
+  params: any[];
 }
 
 /**
@@ -109,6 +148,16 @@ export interface ModularOperations {
    * Useful for freeing memory when done with a set of operations
    */
   clearCache: () => void;
+}
+
+/**
+ * Interface extending ModelInterface for Modular module
+ */
+export interface ModularModelInterface extends ModularOperations, ModelInterface {
+  /**
+   * Get the module state including cache statistics
+   */
+  getState(): ModularState;
 }
 
 /**
