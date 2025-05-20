@@ -5,17 +5,22 @@
  * Implementation of Python-compatible modular arithmetic operations.
  */
 
-import { 
+import {
   ModularOptions,
   ModularOperations,
   ModFunction,
   ModPowFunction,
   ModInverseFunction,
-  MODULAR_CONSTANTS
+  MODULAR_CONSTANTS,
+  ModularInterface,
+  ModularProcessInput,
+  ModularState
 } from './types';
 
 import { PRECISION_CONSTANTS } from '../types';
 import { bitLength as bigintBitLength } from '../bigint';
+import { BaseModel } from '../../../os/model';
+import { createLogging } from '../../../os/logging';
 
 /**
  * Create modular arithmetic operations with the specified options
@@ -561,6 +566,106 @@ function createModularOperations(options: ModularOptions = {}): ModularOperation
   };
 }
 
+/**
+ * Modular model implementation
+ */
+class ModularImplementation extends BaseModel implements ModularInterface {
+  private impl: ModularOperations;
+  private config: Required<ModularOptions>;
+
+  constructor(options: ModularOptions = {}) {
+    const processed = {
+      pythonCompatible: options.pythonCompatible ?? true,
+      useCache: options.useCache ?? true,
+      useOptimized: options.useOptimized ?? true,
+      nativeThreshold: options.nativeThreshold ?? MODULAR_CONSTANTS.MAX_NATIVE_BITS,
+      strict: options.strict ?? false,
+      debug: options.debug ?? false
+    } as Required<ModularOptions>;
+
+    super({ debug: processed.debug, name: options.name || 'precision-modular', version: options.version || '1.0.0' });
+
+    this.config = processed;
+    this.impl = createModularOperations(processed);
+
+    // bind methods
+    this.mod = this.impl.mod;
+    this.modPow = this.impl.modPow;
+    this.modInverse = this.impl.modInverse;
+    this.extendedGcd = this.impl.extendedGcd;
+    this.gcd = this.impl.gcd;
+    this.lcm = this.impl.lcm;
+    this.modMul = this.impl.modMul;
+    this.clearCache = this.impl.clearCache;
+  }
+
+  protected async onInitialize(): Promise<void> {
+    this.logger = createLogging();
+    this.state.custom = { config: this.config };
+  }
+
+  protected async onProcess<T = ModularProcessInput, R = unknown>(input: T): Promise<R> {
+    const req = input as unknown as ModularProcessInput;
+    switch (req.operation) {
+      case 'mod':
+        return this.impl.mod(req.params[0], req.params[1]) as unknown as R;
+      case 'modPow':
+        return this.impl.modPow(req.params[0], req.params[1], req.params[2]) as unknown as R;
+      case 'modInverse':
+        return this.impl.modInverse(req.params[0], req.params[1]) as unknown as R;
+      case 'extendedGcd':
+        return this.impl.extendedGcd(req.params[0], req.params[1]) as unknown as R;
+      case 'gcd':
+        return this.impl.gcd(req.params[0], req.params[1]) as unknown as R;
+      case 'lcm':
+        return this.impl.lcm(req.params[0], req.params[1]) as unknown as R;
+      case 'modMul':
+        return this.impl.modMul(req.params[0], req.params[1], req.params[2]) as unknown as R;
+      case 'clearCache':
+        this.impl.clearCache();
+        return undefined as unknown as R;
+      default:
+        throw new Error(`Unknown operation: ${req.operation}`);
+    }
+  }
+
+  protected async onReset(): Promise<void> {
+    this.impl.clearCache();
+  }
+
+  protected async onTerminate(): Promise<void> {
+    // nothing extra
+  }
+
+  getState(): ModularState {
+    const base = super.getState();
+    return { ...base, config: this.config } as ModularState;
+  }
+
+  // placeholder properties overwritten in constructor
+  mod!: ModFunction;
+  modPow!: ModPowFunction;
+  modInverse!: ModInverseFunction;
+  extendedGcd!: (a: bigint, b: bigint) => [bigint, bigint, bigint];
+  gcd!: (a: bigint, b: bigint) => bigint;
+  lcm!: (a: bigint, b: bigint) => bigint;
+  modMul!: ModMulFunction;
+  clearCache!: () => void;
+}
+
+export function createModular(options: ModularOptions = {}): ModularInterface {
+  return new ModularImplementation(options);
+}
+
+export async function createAndInitializeModular(options: ModularOptions = {}): Promise<ModularInterface> {
+  const instance = createModular(options);
+  const result = await instance.initialize();
+  if (!result.success) {
+    throw new Error(`Failed to initialize modular module: ${result.error}`);
+  }
+  return instance;
+}
+
 // Create default instance with standard options
 const defaultOperations = createModularOperations();
 
@@ -577,10 +682,17 @@ export const {
 } = defaultOperations;
 
 // Export types and interfaces
-export type { ModularOperations };
+export type {
+  ModularOperations,
+  ModularOptions,
+  ModularInterface,
+  ModularProcessInput,
+  ModularState,
+  ModularFactory
+};
 
 // Export the factory function
-export { createModularOperations };
+export { createModularOperations, createModular, createAndInitializeModular, ModularImplementation };
 
 // Export constants
 export { MODULAR_CONSTANTS };
