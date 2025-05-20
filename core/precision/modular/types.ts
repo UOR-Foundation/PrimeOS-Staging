@@ -6,10 +6,16 @@
  * Python-compatible modular operations.
  */
 
+import {
+  ModelOptions,
+  ModelInterface,
+  ModelState
+} from '../../../os/model/types';
+
 /**
  * Options for modular arithmetic operations
  */
-export interface ModularOptions {
+export interface ModularOptions extends ModelOptions {
   /**
    * Whether to use Python-compatible modulo semantics for negative numbers
    * When true: mod(-5, 3) = 1 (like Python)
@@ -131,3 +137,43 @@ export const MODULAR_CONSTANTS = {
    */
   MAX_SUPPORTED_BITS: 4096
 };
+
+
+/**
+ * Extended state for the Modular module
+ */
+export interface ModularState extends ModelState {
+  config: Required<ModularOptions>;
+  cache?: {
+    inverse: { size: number; hits: number; misses: number };
+    gcd: { size: number; hits: number; misses: number };
+  };
+}
+
+/**
+ * Input type for Modular model processing
+ */
+export interface ModularProcessInput {
+  operation:
+    | 'mod'
+    | 'modPow'
+    | 'modInverse'
+    | 'extendedGcd'
+    | 'gcd'
+    | 'lcm'
+    | 'modMul'
+    | 'clearCache';
+  params: any[];
+}
+
+/**
+ * Interface for the Modular model
+ */
+export interface ModularInterface extends ModelInterface, ModularOperations {
+  getState(): ModularState;
+}
+
+/**
+ * Factory function type
+ */
+export type ModularFactory = (options?: ModularOptions) => ModularInterface;
