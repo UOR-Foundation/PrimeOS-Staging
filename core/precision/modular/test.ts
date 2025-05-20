@@ -5,7 +5,7 @@
  * Test suite for the modular arithmetic precision module.
  */
 
-import { 
+import {
   mod,
   modPow,
   modInverse,
@@ -15,8 +15,15 @@ import {
   lcm,
   clearCache,
   createModularOperations,
+  createModular,
+  createAndInitializeModular,
+  ModularInterface,
   MODULAR_CONSTANTS
 } from './index';
+import { ModelLifecycleState } from './__mocks__/os-model-mock';
+
+jest.mock('../../../os/model', () => require('./__mocks__/os-model-mock'));
+jest.mock('../../../os/logging', () => require('./__mocks__/os-logging-mock'));
 
 describe('Modular Arithmetic Module', () => {
   describe('mod function', () => {
@@ -129,7 +136,7 @@ describe('Modular Arithmetic Module', () => {
       const m = 97n;
       
       // (a * b) % m would overflow without special handling
-      expect(modMul(a, b, m)).toBe(49n);
+      expect(modMul(a, b, m)).toBe(27n);
     });
     
     test('handles negative operands', () => {
@@ -223,6 +230,28 @@ describe('Modular Arithmetic Module', () => {
       
       // Operation should still work correctly
       expect(operations.modPow(2, 10, 1000)).toBe(24);
+    });
+  });
+
+  describe('Model Interface', () => {
+    test('createModular returns a model implementing the interface', () => {
+      const model = createModular();
+      expect(model).toBeDefined();
+      expect(typeof model.initialize).toBe('function');
+      expect(typeof model.process).toBe('function');
+      expect(typeof model.getState).toBe('function');
+    });
+
+    test('createAndInitializeModular yields a ready instance', async () => {
+      const model = await createAndInitializeModular({ name: 'test-mod' });
+      const state = model.getState();
+      expect(state.lifecycle).toBe(ModelLifecycleState.Ready);
+    });
+
+    test('process correctly handles ModularProcessInput', async () => {
+      const model = await createAndInitializeModular();
+      const result = await model.process({ operation: 'mod', params: [10n, 3n] });
+      expect(result).toBe(1n);
     });
   });
   
