@@ -85,18 +85,30 @@ export interface ModularProcessInput {
 
 /**
  * Function signature for basic modulo operation
+ * 
+ * @remarks
+ * This function always returns a bigint value regardless of input types.
+ * For number inputs, the result is converted to bigint.
  */
-export type ModFunction = (a: bigint | number, b: bigint | number) => bigint | number;
+export type ModFunction = (a: bigint | number, b: bigint | number) => bigint;
 
 /**
  * Function signature for modular exponentiation
+ * 
+ * @remarks
+ * This function always returns a bigint value regardless of input types.
+ * For number inputs, the result is converted to bigint.
  */
-export type ModPowFunction = (base: bigint | number, exponent: bigint | number, modulus: bigint | number) => bigint | number;
+export type ModPowFunction = (base: bigint | number, exponent: bigint | number, modulus: bigint | number) => bigint;
 
 /**
  * Function signature for modular multiplicative inverse
+ * 
+ * @remarks
+ * This function always returns a bigint value regardless of input types.
+ * For number inputs, the result is converted to bigint.
  */
-export type ModInverseFunction = (a: bigint | number, m: bigint | number) => bigint | number;
+export type ModInverseFunction = (a: bigint | number, m: bigint | number) => bigint;
 
 /**
  * Function signature for modular multiplication with overflow protection
@@ -148,6 +160,31 @@ export interface ModularOperations {
    * Useful for freeing memory when done with a set of operations
    */
   clearCache: () => void;
+  
+  /**
+   * Karatsuba multiplication for large integers
+   */
+  karatsubaMultiply: (a: bigint, b: bigint) => bigint;
+  
+  /**
+   * Modular multiplication using Karatsuba algorithm
+   */
+  karatsubaModMul: (a: bigint | number, b: bigint | number, m: bigint | number) => bigint;
+  
+  /**
+   * Binary GCD algorithm (Stein's algorithm)
+   */
+  binaryGcd: (a: bigint, b: bigint) => bigint;
+  
+  /**
+   * Sliding window modular exponentiation
+   */
+  slidingWindowModPow: (
+    base: bigint | number, 
+    exponent: bigint | number, 
+    modulus: bigint | number, 
+    windowSize?: number
+  ) => bigint;
 }
 
 /**
@@ -160,23 +197,8 @@ export interface ModularModelInterface extends ModularOperations, ModelInterface
   getState(): ModularState;
 }
 
-/**
- * Constants used in modular arithmetic operations
- */
-export const MODULAR_CONSTANTS = {
-  /**
-   * Maximum bit size for using native implementation without overflow concerns
-   */
-  MAX_NATIVE_BITS: 50,
-  
-  /**
-   * Default cache size for modular operations
-   */
-  DEFAULT_CACHE_SIZE: 1000,
-  
-  /**
-   * Maximum supported bit length for modular operations
-   * Operations beyond this size may cause performance issues
-   */
-  MAX_SUPPORTED_BITS: 4096
-};
+// Import constants from separate file
+import { MODULAR_CONSTANTS } from './constants';
+
+// Re-export constants for backward compatibility
+export { MODULAR_CONSTANTS };

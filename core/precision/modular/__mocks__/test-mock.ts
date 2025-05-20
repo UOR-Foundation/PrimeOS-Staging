@@ -15,15 +15,12 @@ import {
   ModFunction,
   ModPowFunction,
   ModInverseFunction,
-  ModMulFunction
+  ModMulFunction,
+  MODULAR_CONSTANTS
 } from '../types';
 
-// Default modular constants
-export const MODULAR_CONSTANTS = {
-  MAX_NATIVE_BITS: 50,
-  DEFAULT_CACHE_SIZE: 1000,
-  MAX_SUPPORTED_BITS: 4096
-};
+// Re-export the constants
+export { MODULAR_CONSTANTS };
 
 /**
  * Create a mock modular arithmetic implementation
@@ -319,6 +316,72 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
         timestamp: Date.now(),
         source: config.name
       };
+    },
+    
+    // Advanced algorithms
+    karatsubaMultiply: (a, b) => {
+      state.operationCount.total++;
+      state.operationCount.success++;
+      
+      // Simple mock implementation - just use regular multiplication
+      return a * b;
+    },
+    
+    karatsubaModMul: (a, b, m) => {
+      state.operationCount.total++;
+      state.operationCount.success++;
+      
+      // Simple mock implementation - just use regular modMul
+      const aBig = BigInt(a);
+      const bBig = BigInt(b);
+      const mBig = BigInt(m);
+      
+      return (aBig * bBig) % mBig;
+    },
+    
+    binaryGcd: (a, b) => {
+      state.operationCount.total++;
+      state.operationCount.success++;
+      
+      // Simple mock implementation - just use regular gcd
+      let aBig = a < 0n ? -a : a;
+      let bBig = b < 0n ? -b : b;
+      
+      while (bBig !== 0n) {
+        const temp = bBig;
+        bBig = aBig % bBig;
+        aBig = temp;
+      }
+      
+      return aBig;
+    },
+    
+    slidingWindowModPow: (base, exponent, modulus, windowSize = 4) => {
+      state.operationCount.total++;
+      state.operationCount.success++;
+      
+      // Simple mock implementation - just use regular modPow
+      const baseBig = BigInt(base);
+      const expBig = BigInt(exponent);
+      const modBig = BigInt(modulus);
+      
+      if (modBig === 1n) return 0n;
+      if (expBig === 0n) return 1n;
+      if (baseBig === 0n) return 0n;
+      
+      let result = 1n;
+      let b = baseBig % modBig;
+      let e = expBig;
+      
+      while (e > 0n) {
+        if (e % 2n === 1n) {
+          result = (result * b) % modBig;
+        }
+        e >>= 1n;
+        b = (b * b) % modBig;
+      }
+      
+      return result;
     },
     
     createResult(success, data, error) {

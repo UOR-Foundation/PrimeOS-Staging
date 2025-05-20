@@ -16,14 +16,18 @@ import {
   clearCache,
   createModularOperations,
   createAndInitializeModularOperations,
-  MODULAR_CONSTANTS
+  MODULAR_CONSTANTS,
+  ModFunction,
+  ModPowFunction,
+  ModInverseFunction,
+  ModMulFunction
 } from './index';
 
 describe('Modular Arithmetic Module', () => {
   describe('mod function', () => {
     test('standard modulo operations', () => {
       // Basic positive cases
-      expect(mod(10, 3)).toBe(1);
+      expect(mod(10, 3)).toBe(1n);
       expect(mod(10n, 3n)).toBe(1n);
       expect(mod(10, 3n)).toBe(1n);
       expect(mod(10n, 3)).toBe(1n);
@@ -62,7 +66,7 @@ describe('Model Interface', () => {
       params: [10, 3]
     });
     
-    expect(modResult.data).toBe(1);
+    expect(modResult.data).toBe(1n);
     
     // Test modPow operation
     const powResult = await modular.process({
@@ -98,9 +102,9 @@ describe('Model Interface', () => {
     
     test('Python-compatible modulo with negative numbers', () => {
       // Negative numbers should behave like Python
-      expect(mod(-5, 3)).toBe(1);  // In JS: -5 % 3 = -2
+      expect(mod(-5, 3)).toBe(1n);  // In JS: -5 % 3 = -2
       expect(mod(-5n, 3n)).toBe(1n);
-      expect(mod(-15, 4)).toBe(1); // In JS: -15 % 4 = -3
+      expect(mod(-15, 4)).toBe(1n); // In JS: -15 % 4 = -3
       expect(mod(-15n, 4n)).toBe(1n);
     });
     
@@ -109,11 +113,11 @@ describe('Model Interface', () => {
       expect(mod(9007199254740991n, 10n)).toBe(1n); // MAX_SAFE_INTEGER % 10
       
       // Zero modulo
-      expect(mod(0, 5)).toBe(0);
+      expect(mod(0, 5)).toBe(0n);
       expect(mod(0n, 5n)).toBe(0n);
       
       // Negative modulus should be handled
-      expect(mod(10, -3)).toBe(1);  // Should normalize the modulus
+      expect(mod(10, -3)).toBe(1n);  // Should normalize the modulus
       expect(mod(10n, -3n)).toBe(1n);
     });
   });
@@ -283,7 +287,7 @@ describe('Model Interface', () => {
       });
       
       // JavaScript modulo behavior (not Python compatible)
-      expect(operations.mod(-5, 3)).toBe(-2);
+      expect(operations.mod(-5, 3)).toBe(-2n);
       
       // Operation should still work correctly
       expect(operations.modPow(2, 10, 1000)).toBe(24n);
@@ -295,6 +299,63 @@ describe('Model Interface', () => {
       expect(MODULAR_CONSTANTS.MAX_NATIVE_BITS).toBe(50);
       expect(MODULAR_CONSTANTS.DEFAULT_CACHE_SIZE).toBe(1000);
       expect(MODULAR_CONSTANTS.MAX_SUPPORTED_BITS).toBe(4096);
+    });
+  });
+  
+  describe('Type Safety', () => {
+    test('functions return bigint values regardless of input types', () => {
+      // Test mod function
+      const modResult1: bigint = mod(10, 3);
+      const modResult2: bigint = mod(10n, 3n);
+      const modResult3: bigint = mod(10, 3n);
+      const modResult4: bigint = mod(10n, 3);
+      
+      // Verify types at runtime
+      expect(typeof modResult1).toBe('bigint');
+      expect(typeof modResult2).toBe('bigint');
+      expect(typeof modResult3).toBe('bigint');
+      expect(typeof modResult4).toBe('bigint');
+      
+      // Test modPow function
+      const powResult1: bigint = modPow(2, 10, 1000);
+      const powResult2: bigint = modPow(2n, 10n, 1000n);
+      
+      // Verify types at runtime
+      expect(typeof powResult1).toBe('bigint');
+      expect(typeof powResult2).toBe('bigint');
+      
+      // Test modInverse function
+      const invResult1: bigint = modInverse(3, 11);
+      const invResult2: bigint = modInverse(3n, 11n);
+      
+      // Verify types at runtime
+      expect(typeof invResult1).toBe('bigint');
+      expect(typeof invResult2).toBe('bigint');
+      
+      // Test modMul function
+      const mulResult1: bigint = modMul(7, 8, 13);
+      const mulResult2: bigint = modMul(7n, 8n, 13n);
+      
+      // Verify types at runtime
+      expect(typeof mulResult1).toBe('bigint');
+      expect(typeof mulResult2).toBe('bigint');
+    });
+    
+    test('function signatures enforce correct return types', () => {
+      // These type assertions verify that the function signatures
+      // correctly specify bigint as the return type
+      
+      // Create type variables with explicit function types
+      const modFunc: ModFunction = mod;
+      const powFunc: ModPowFunction = modPow;
+      const invFunc: ModInverseFunction = modInverse;
+      const mulFunc: ModMulFunction = modMul;
+      
+      // If these assignments compile, the types are correct
+      expect(modFunc).toBe(mod);
+      expect(powFunc).toBe(modPow);
+      expect(invFunc).toBe(modInverse);
+      expect(mulFunc).toBe(modMul);
     });
   });
   
@@ -333,7 +394,7 @@ describe('Model Interface', () => {
       const debugOps = createModularOperations({ debug: true });
       
       // Results should be the same as without debug mode
-      expect(debugOps.mod(10, 3)).toBe(1);
+      expect(debugOps.mod(10, 3)).toBe(1n);
       expect(debugOps.modPow(2, 10, 1000)).toBe(24n);
       expect(debugOps.modInverse(3, 11)).toBe(4n);
       expect(debugOps.gcd(48n, 18n)).toBe(6n);
@@ -346,7 +407,7 @@ describe('Model Interface', () => {
       });
       
       // Normal operations should work
-      expect(strictOps.mod(10, 3)).toBe(1);
+      expect(strictOps.mod(10, 3)).toBe(1n);
       expect(strictOps.modPow(2, 10, 1000)).toBe(24n);
       
       // We can't easily test the size limits without exceeding memory constraints
