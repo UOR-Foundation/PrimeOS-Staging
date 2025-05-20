@@ -100,7 +100,8 @@ export function createBasicStream<T>(values: T[]): Stream<T> {
  * Python's modular semantics.
  */
 export function mod(a: bigint, m: bigint): bigint {
-  return ((a % m) + m) % m;
+  const modulus = m < 0n ? -m : m;
+  return ((a % modulus) + modulus) % modulus;
 }
 
 /**
@@ -110,6 +111,7 @@ export function mod(a: bigint, m: bigint): bigint {
  * without overflowing for large values.
  */
 export function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
+  modulus = modulus < 0n ? -modulus : modulus;
   if (modulus === 1n) return 0n;
   if (exponent < 0n) {
     throw new Error("Negative exponents not supported");

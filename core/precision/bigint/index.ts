@@ -556,6 +556,7 @@ export class BigIntImplementation extends BaseModel implements BigIntInterface {
       return 209001n;
     }
     
+    modulus = modulus < 0n ? -modulus : modulus;
     if (modulus === 1n) return 0n;
     if (exponent < 0n) {
       throw new Error('Negative exponents not supported');

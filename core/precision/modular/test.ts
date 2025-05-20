@@ -51,6 +51,8 @@ describe('Modular Arithmetic Module', () => {
       // Negative modulus should be handled
       expect(mod(10, -3)).toBe(1);  // Should normalize the modulus
       expect(mod(10n, -3n)).toBe(1n);
+      expect(mod(10, -3n)).toBe(1n);
+      expect(mod(10n, -3)).toBe(1n);
     });
   });
   
@@ -136,6 +138,11 @@ describe('Modular Arithmetic Module', () => {
       expect(modMul(-7, 8, 13)).toBe(9n);  // -7*8 = -56 ≡ 9 (mod 13)
       expect(modMul(7, -8, 13)).toBe(9n);  // 7*(-8) = -56 ≡ 9 (mod 13)
       expect(modMul(-7, -8, 13)).toBe(4n); // (-7)*(-8) = 56 ≡ 4 (mod 13)
+    });
+
+    test('handles negative modulus', () => {
+      expect(modMul(7, 8, -13)).toBe(4n);
+      expect(modMul(-7, 8, -13)).toBe(9n);
     });
   });
   
