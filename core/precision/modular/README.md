@@ -59,6 +59,27 @@ const [g, x, y] = extendedGcd(35n, 15n);
 clearCache();
 ```
 
+### Model Interface
+
+```typescript
+import { createModular, createAndInitializeModular } from '@primeos/core/precision/modular';
+
+// Create and initialize separately
+const modular = createModular({ debug: true });
+await modular.initialize();
+
+// Or create and initialize in one step
+const modular2 = await createAndInitializeModular();
+
+// Use instance methods via process
+const result = await modular2.process({
+  operation: 'mod',
+  params: [10n, 3n]
+});
+
+await modular2.terminate();
+```
+
 ## Creating Custom Instances
 
 You can create a customized modular arithmetic module with specific options:
