@@ -6,6 +6,13 @@
  */
 
 import { Factor } from '../types';
+import {
+  ModelOptions,
+  ModelInterface,
+  ModelResult,
+  ModelState,
+  ModelLifecycleState
+} from '../../../os/model';
 
 /**
  * Interface for a prime registry used in checksum operations
@@ -45,7 +52,7 @@ export interface XorHashState {
 /**
  * Options for checksums operations
  */
-export interface ChecksumOptions {
+export interface ChecksumOptions extends ModelOptions {
   /**
    * Power (exponent) to use for the checksum prime
    * Default is 6
@@ -66,6 +73,36 @@ export interface ChecksumOptions {
    * Enable debug logging for checksums operations
    */
   debug?: boolean;
+}
+
+/**
+ * Extended state for Checksums module
+ */
+export interface ChecksumState extends ModelState {
+  /**
+   * Configuration settings
+   */
+  config: ChecksumOptions;
+  
+  /**
+   * Cache statistics (if caching is enabled)
+   */
+  cache?: {
+    size: number;
+    hits: number;
+    misses: number;
+  };
+}
+
+/**
+ * Input types for Checksums module processing
+ */
+export interface ChecksumProcessInput {
+  operation: 'calculateXorSum' | 'calculateChecksum' | 'attachChecksum' | 
+             'extractFactorsAndChecksum' | 'calculateBatchChecksum' | 
+             'createXorHashState' | 'updateXorHash' | 'getChecksumFromXorHash' |
+             'clearCache';
+  params: any[];
 }
 
 /**
@@ -178,6 +215,16 @@ export interface ChecksumsImplementation {
 }
 
 /**
+ * Interface extending ModelInterface for Checksums module
+ */
+export interface ChecksumsModelInterface extends ChecksumsImplementation, ModelInterface {
+  /**
+   * Get the module state including cache statistics
+   */
+  getState(): ChecksumState;
+}
+
+/**
  * Function to create a ChecksumsImplementation with options
  */
-export type ChecksumsFactory = (options?: ChecksumOptions) => ChecksumsImplementation;
+export type ChecksumsFactory = (options?: ChecksumOptions) => ChecksumsModelInterface;

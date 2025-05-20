@@ -29,11 +29,11 @@
     "prime",
     "number-theory"
   ],
-  "author": "PrimeOS Team",
+  "author": "UOR Foundation Team",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/primeos/primeos.git",
+    "url": "https://github.com/uor-foundation/primeos.git",
     "directory": "core/precision/bigint"
   }
 }

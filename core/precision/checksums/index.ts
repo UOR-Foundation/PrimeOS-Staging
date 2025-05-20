@@ -3,18 +3,28 @@
  * =====================
  *
  * This module provides data integrity through prime-based checksums.
+ * Implements the PrimeOS Model interface pattern for consistent lifecycle management.
  */
 
 import {
   ChecksumOptions,
   ChecksumsImplementation,
+  ChecksumsModelInterface,
+  ChecksumState,
   ChecksumExtractionResult,
   PrimeRegistryForChecksums,
   XorHashState,
-  XorSumFunction
+  XorSumFunction,
+  ChecksumProcessInput
 } from './types';
 import { Factor } from '../types';
 import { modPow, modMul } from '../modular';
+import {
+  BaseModel,
+  ModelResult,
+  ModelLifecycleState
+} from '../../../os/model';
+import { createLogging } from '../../../os/logging';
 
 /**
  * Default options for checksum operations
@@ -23,7 +33,9 @@ const DEFAULT_OPTIONS: ChecksumOptions = {
   checksumPower: 6, // Default power based on the UOR axioms
   enableCache: true,
   verifyOnOperation: false,
-  debug: false
+  debug: false,
+  name: 'precision-checksums',
+  version: '1.0.0'
 };
 
 /**
@@ -33,18 +45,24 @@ class LRUCache<K, V> {
   private capacity: number;
   private cache = new Map<K, V>();
   private keyOrder: K[] = [];
+  private hits = 0;
+  private misses = 0;
 
   constructor(capacity: number) {
     this.capacity = capacity;
   }
 
   get(key: K): V | undefined {
-    if (!this.cache.has(key)) return undefined;
+    if (!this.cache.has(key)) {
+      this.misses++;
+      return undefined;
+    }
     
     // Move key to the end (most recently used)
     this.keyOrder = this.keyOrder.filter(k => k !== key);
     this.keyOrder.push(key);
     
+    this.hits++;
     return this.cache.get(key);
   }
 
@@ -69,38 +87,181 @@ class LRUCache<K, V> {
   clear(): void {
     this.cache.clear();
     this.keyOrder = [];
+    this.hits = 0;
+    this.misses = 0;
   }
 
   size(): number {
     return this.cache.size;
+  }
+  
+  getStats(): { size: number, hits: number, misses: number } {
+    return {
+      size: this.cache.size,
+      hits: this.hits,
+      misses: this.misses
+    };
   }
 }
 
 /**
  * ChecksumsImplementation provides methods for calculating, attaching, 
  * and extracting checksums to ensure data integrity.
+ * Extends BaseModel to implement the PrimeOS Model interface pattern.
  */
-export class ChecksumsImpl implements ChecksumsImplementation {
-  private options: ChecksumOptions;
+export class ChecksumsImpl extends BaseModel implements ChecksumsModelInterface {
   private cache: LRUCache<string, bigint>;
+  private checksumOptions: ChecksumOptions;
   
   /**
    * Create a new checksums implementation
    */
   constructor(options: ChecksumOptions = {}) {
-    this.options = { ...DEFAULT_OPTIONS, ...options };
+    // Initialize BaseModel with options
+    super({ ...DEFAULT_OPTIONS, ...options });
+    
+    // Store checksum-specific options
+    this.checksumOptions = { ...DEFAULT_OPTIONS, ...options };
+    
+    // Create LRU cache for checksum calculations
     this.cache = new LRUCache<string, bigint>(1000); // Cache up to 1000 entries
     
-    if (this.options.debug) {
-      console.log('Created ChecksumsImpl with options:', this.options);
+    if (this.checksumOptions.debug) {
+      // Will use logger after initialization
+      console.log('Created ChecksumsImpl with options:', this.checksumOptions);
     }
+  }
+  
+  /**
+   * Initialize the module
+   */
+  protected async onInitialize(): Promise<void> {
+    // Add custom state tracking
+    this.state.custom = {
+      config: this.checksumOptions,
+      cache: this.checksumOptions.enableCache ? this.cache.getStats() : undefined
+    };
+    
+    await this.logger.debug('Checksums module initialized with configuration', this.checksumOptions);
+  }
+  
+  /**
+   * Process operation request
+   */
+  protected async onProcess<T = ChecksumProcessInput, R = unknown>(input: T): Promise<R> {
+    if (!input) {
+      throw new Error('Input cannot be undefined or null');
+    }
+    
+    await this.logger.debug('Processing input', input);
+    
+    // Process based on input type
+    if (typeof input === 'object' && input !== null && 'operation' in input && 'params' in input) {
+      const request = input as unknown as ChecksumProcessInput;
+      
+      switch (request.operation) {
+        case 'calculateXorSum':
+          return this.calculateXorSum(
+            request.params[0] as Factor[],
+            request.params[1] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'calculateChecksum':
+          return this.calculateChecksum(
+            request.params[0] as Factor[],
+            request.params[1] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'attachChecksum':
+          return this.attachChecksum(
+            request.params[0] as bigint,
+            request.params[1] as Factor[],
+            request.params[2] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'extractFactorsAndChecksum':
+          return this.extractFactorsAndChecksum(
+            request.params[0] as bigint,
+            request.params[1] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'calculateBatchChecksum':
+          return this.calculateBatchChecksum(
+            request.params[0] as bigint[],
+            request.params[1] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'createXorHashState':
+          return this.createXorHashState() as unknown as R;
+          
+        case 'updateXorHash':
+          return this.updateXorHash(
+            request.params[0] as XorHashState,
+            request.params[1] as bigint,
+            request.params[2] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'getChecksumFromXorHash':
+          return this.getChecksumFromXorHash(
+            request.params[0] as XorHashState,
+            request.params[1] as PrimeRegistryForChecksums
+          ) as unknown as R;
+          
+        case 'clearCache':
+          this.clearCache();
+          return undefined as unknown as R;
+          
+        default:
+          throw new Error(`Unknown operation: ${(request as any).operation}`);
+      }
+    } else {
+      // For direct function calls without the operation wrapper
+      return input as unknown as R;
+    }
+  }
+  
+  /**
+   * Reset the module state
+   */
+  protected async onReset(): Promise<void> {
+    // Clear cache
+    this.clearCache();
+    
+    // Update state
+    this.state.custom = {
+      config: this.checksumOptions,
+      cache: this.checksumOptions.enableCache ? this.cache.getStats() : undefined
+    };
+    
+    await this.logger.debug('Checksums module reset');
+  }
+  
+  /**
+   * Clean up resources when module is terminated
+   */
+  protected async onTerminate(): Promise<void> {
+    // Nothing to clean up for Checksums module
+    await this.logger.debug('Checksums module terminated');
+  }
+  
+  /**
+   * Get the module state including cache statistics
+   */
+  getState(): ChecksumState {
+    const baseState = super.getState();
+    
+    return {
+      ...baseState,
+      config: this.checksumOptions,
+      cache: this.checksumOptions.enableCache ? this.cache.getStats() : undefined
+    } as ChecksumState;
   }
   
   /**
    * Get the checksum power (exponent)
    */
   getChecksumPower(): number {
-    return this.options.checksumPower || DEFAULT_OPTIONS.checksumPower!;
+    return this.checksumOptions.checksumPower || DEFAULT_OPTIONS.checksumPower!;
   }
   
   /**
@@ -108,9 +269,8 @@ export class ChecksumsImpl implements ChecksumsImplementation {
    * This is the core algorithm for checksum calculation
    */
   calculateXorSum(factors: Factor[], primeRegistry?: PrimeRegistryForChecksums): number {
-    if (this.options.debug) {
-      console.log(`calculateXorSum for ${factors.length} factors`, 
-        primeRegistry ? 'with registry' : 'without registry');
+    if (this.checksumOptions.debug) {
+      this.logger.debug(`calculateXorSum for ${factors.length} factors ${primeRegistry ? 'with registry' : 'without registry'}`).catch(() => {});
     }
     
     let xorSum = 0;
@@ -178,16 +338,16 @@ export class ChecksumsImpl implements ChecksumsImplementation {
     }
     
     // Convert factors to a cache key if caching is enabled
-    const cacheKey = this.options.enableCache 
+    const cacheKey = this.checksumOptions.enableCache 
       ? factors.map(f => `${f.prime}^${f.exponent}`).join(',')
       : '';
       
       // Check cache
-      if (this.options.enableCache) {
+      if (this.checksumOptions.enableCache) {
         const cached = this.cache.get(cacheKey);
         if (cached !== undefined) {
-          if (this.options.debug) {
-            console.log(`Cache hit for checksum calculation: ${cacheKey}`);
+          if (this.checksumOptions.debug) {
+            this.logger.debug(`Cache hit for checksum calculation: ${cacheKey}`).catch(() => {});
           }
           return cached;
         }
@@ -200,7 +360,7 @@ export class ChecksumsImpl implements ChecksumsImplementation {
     const checksumPrime = primeRegistry.getPrime(xorSum);
     
     // Cache the result
-    if (this.options.enableCache) {
+    if (this.checksumOptions.enableCache) {
       this.cache.set(cacheKey, checksumPrime);
     }
     
@@ -266,8 +426,8 @@ export class ChecksumsImpl implements ChecksumsImplementation {
     factors: Factor[], 
     primeRegistry: PrimeRegistryForChecksums
   ): bigint {
-    if (this.options.debug) {
-      console.log(`Attaching checksum to raw value: ${raw}`);
+    if (this.checksumOptions.debug) {
+      this.logger.debug(`Attaching checksum to raw value: ${raw}`).catch(() => {});
     }
     
     // Calculate the checksum prime
@@ -275,15 +435,18 @@ export class ChecksumsImpl implements ChecksumsImplementation {
     
     // Calculate checksum = checksumPrime^checksumPower
     const checksumPower = this.getChecksumPower();
-    const checksum = modPow(checksumPrime, BigInt(checksumPower), BigInt(Number.MAX_SAFE_INTEGER));
+    
+    // Simple approach: directly multiply by the prime raised to the power
+    // This ensures the checksum factor will have exactly the required exponent
+    const checksum = checksumPrime ** BigInt(checksumPower);
     
     // Multiply raw value by checksum
-    const result = modMul(raw, checksum, BigInt(Number.MAX_SAFE_INTEGER));
+    const result = raw * checksum;
     
     // Verify the checksum if verifyOnOperation is enabled
-    if (this.options.verifyOnOperation) {
-      if (this.options.debug) {
-        console.log(`Verifying checksum during operation (verifyOnOperation=true)`);
+    if (this.checksumOptions.verifyOnOperation) {
+      if (this.checksumOptions.debug) {
+        this.logger.debug(`Verifying checksum during operation (verifyOnOperation=true)`).catch(() => {});
       }
       
       try {
@@ -292,12 +455,12 @@ export class ChecksumsImpl implements ChecksumsImplementation {
           throw new Error('Checksum verification failed during attachment');
         }
         
-        if (this.options.debug) {
-          console.log(`Checksum verification successful`);
+        if (this.checksumOptions.debug) {
+          this.logger.debug(`Checksum verification successful`).catch(() => {});
         }
       } catch (error) {
-        if (this.options.debug) {
-          console.error(`Checksum verification failed:`, error);
+        if (this.checksumOptions.debug) {
+          this.logger.error(`Checksum verification failed:`, error).catch(() => {});
         }
         throw error;
       }
@@ -311,12 +474,13 @@ export class ChecksumsImpl implements ChecksumsImplementation {
    * XORs the checksums of each valid value in the batch
    */
   calculateBatchChecksum(values: bigint[], primeRegistry: PrimeRegistryForChecksums): bigint {
-    if (this.options.debug) {
-      console.log(`Calculating batch checksum for ${values.length} values`);
+    if (this.checksumOptions.debug) {
+      this.logger.debug(`Calculating batch checksum for ${values.length} values`).catch(() => {});
     }
     
     let batchXor = 0;
     let successCount = 0;
+    let invalidCount = 0;
     
     for (const value of values) {
       try {
@@ -327,21 +491,23 @@ export class ChecksumsImpl implements ChecksumsImplementation {
         batchXor ^= checksumIndex;
         successCount++;
       } catch (e) {
-        // Skip invalid values
-        continue;
+        // Count invalid values but don't skip them entirely
+        // Instead, use a special value to mark them as invalid
+        batchXor ^= 0xFFFF; // Use a distinctive pattern for invalid values
+        invalidCount++;
       }
     }
     
     // If no valid values, return the prime at index 0
     if (successCount === 0) {
-      if (this.options.debug) {
-        console.log(`No valid values in batch, returning prime at index 0`);
+      if (this.checksumOptions.debug) {
+        this.logger.debug(`No valid values in batch, returning prime at index 0`).catch(() => {});
       }
       return primeRegistry.getPrime(0);
     }
     
-    if (this.options.debug) {
-      console.log(`Batch XOR sum: ${batchXor}, valid values: ${successCount}/${values.length}`);
+    if (this.checksumOptions.debug) {
+      this.logger.debug(`Batch XOR sum: ${batchXor}, valid values: ${successCount}/${values.length}`).catch(() => {});
     }
     
     return primeRegistry.getPrime(batchXor);
@@ -360,8 +526,8 @@ export class ChecksumsImpl implements ChecksumsImplementation {
    */
   updateXorHash(state: XorHashState, value: bigint, primeRegistry: PrimeRegistryForChecksums): XorHashState {
     try {
-      if (this.options.debug) {
-        console.log(`Updating XOR hash state with value: ${value}`);
+      if (this.checksumOptions.debug) {
+        this.logger.debug(`Updating XOR hash state with value: ${value}`).catch(() => {});
       }
       
       const { checksumPrime } = this.extractFactorsAndChecksum(value, primeRegistry);
@@ -373,15 +539,15 @@ export class ChecksumsImpl implements ChecksumsImplementation {
         count: state.count + 1
       };
       
-      if (this.options.debug) {
-        console.log(`Updated XOR hash: ${state.xorSum} -> ${newState.xorSum}, count: ${newState.count}`);
+      if (this.checksumOptions.debug) {
+        this.logger.debug(`Updated XOR hash: ${state.xorSum} -> ${newState.xorSum}, count: ${newState.count}`).catch(() => {});
       }
       
       return newState;
     } catch (e) {
       // Skip invalid values
-      if (this.options.debug) {
-        console.log(`Skipping invalid value in updateXorHash:`, e);
+      if (this.checksumOptions.debug) {
+        this.logger.debug(`Skipping invalid value in updateXorHash: ${e}`).catch(() => {});
       }
       return state;
     }
@@ -405,8 +571,24 @@ export class ChecksumsImpl implements ChecksumsImplementation {
 /**
  * Create a checksums implementation with the specified options
  */
-export function createChecksums(options: ChecksumOptions = {}): ChecksumsImplementation {
+export function createChecksums(options: ChecksumOptions = {}): ChecksumsModelInterface {
   return new ChecksumsImpl(options);
+}
+
+/**
+ * Create and initialize a checksums module in a single step
+ */
+export async function createAndInitializeChecksums(
+  options: ChecksumOptions = {}
+): Promise<ChecksumsModelInterface> {
+  const instance = createChecksums(options);
+  const result = await instance.initialize();
+  
+  if (!result.success) {
+    throw new Error(`Failed to initialize checksums module: ${result.error}`);
+  }
+  
+  return instance;
 }
 
 // Export default instance with standard options

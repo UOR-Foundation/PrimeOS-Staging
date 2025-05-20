@@ -1,6 +1,6 @@
 {
-  "name": "checksums",
-  "version": "0.1.0",
+  "name": "@primeos/core/precision/checksums",
+  "version": "1.0.0",
   "description": "Checksums implementation for PrimeOS",
   "main": "index.js",
   "scripts": {
@@ -10,11 +10,30 @@
   },
   "keywords": [
     "primeos",
-    "checksums"
+    "checksums",
+    "integrity",
+    "verification",
+    "prime"
   ],
-  "author": "",
+  "author": "PrimeOS Team",
   "license": "MIT",
   "dependencies": {
+    "@primeos/os/model": "^1.0.0",
+    "@primeos/os/logging": "^1.0.0",
     "precision": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.0.5",
+    "typescript": "^5.0.0",
+    "eslint": "^8.38.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.0",
+    "@typescript-eslint/parser": "^5.59.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/primeos/primeos.git",
+    "directory": "core/precision/checksums"
   }
 }
