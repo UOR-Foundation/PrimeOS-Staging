@@ -16,6 +16,7 @@ import {
 
 /**
  * Interface for a prime registry used in checksum operations
+ * This interface aligns with BasePrimeRegistry in verification/types.ts
  */
 export interface PrimeRegistryForChecksums {
   /**

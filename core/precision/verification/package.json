@@ -1,20 +1,38 @@
 {
-  "name": "verification",
-  "version": "0.1.0",
-  "description": "Verification implementation for PrimeOS",
+  "name": "@primeos/core-precision-verification",
+  "version": "1.0.0",
+  "description": "Data integrity verification module for PrimeOS",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
-    "test": "jest",
     "build": "tsc",
-    "lint": "eslint . --ext .ts"
+    "test": "jest",
+    "lint": "eslint *.ts",
+    "clean": "rimraf *.js *.js.map *.d.ts"
   },
   "keywords": [
     "primeos",
-    "verification"
+    "verification",
+    "integrity",
+    "checksum",
+    "prime"
   ],
-  "author": "",
+  "author": "PrimeOS Team",
   "license": "MIT",
   "dependencies": {
-    "precision": "^0.1.0"
+    "@primeos/core-precision-checksums": "^1.0.0",
+    "@primeos/core-precision": "^1.0.0",
+    "@primeos/core-precision-cache": "^1.0.0",
+    "@primeos/os-logging": "^1.0.0",
+    "@primeos/os-model": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.15.11",
+    "eslint": "^8.38.0",
+    "jest": "^29.5.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.4"
   }
 }
