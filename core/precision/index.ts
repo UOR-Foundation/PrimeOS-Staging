@@ -67,9 +67,17 @@ export {
   // Verification operations
   verifyValue,
   createOptimizedVerifier,
-  VerificationContext,
   createVerification,
-  VerificationStatus
+  VerificationStatus,
+  
+  // Verification cache operations
+  VerificationCache,
+  VerificationCacheAdvanced,
+  VerificationCacheFactory,
+  VerificationCacheFactoryAdvanced,
+  CacheEvictionPolicy,
+  createCacheFactory,
+  createDefaultCache
 } from './verification';
 
 // Import and re-export common types
@@ -101,6 +109,17 @@ export const MathUtilities = {
     } catch (e) {
       return false;
     }
+  },
+  
+  // Cache operations
+  createCache: (options: any) => {
+    return verificationModule.createCacheFactory().createCache(options);
+  },
+  memoize: <T extends (...args: any[]) => any>(fn: T, options?: any) => {
+    return verificationModule.createCacheFactory().memoize(fn, options);
+  },
+  memoizeAsync: <T extends (...args: any[]) => Promise<any>>(fn: T, options?: any) => {
+    return verificationModule.createCacheFactory().memoizeAsync(fn, options);
   },
   
   // Utility operations
@@ -137,12 +156,52 @@ export interface PrecisionConfiguration {
    * Checksum power (exponent) to use for checksums
    */
   checksumPower?: number;
+  
+  /**
+   * Cache size for verification and other caching operations
+   */
+  cacheSize?: number;
+  
+  /**
+   * Cache eviction policy
+   */
+  cachePolicy?: 'lru' | 'lfu' | 'fifo' | 'time';
+  
+  /**
+   * Time-to-live for cache entries (ms)
+   */
+  cacheTTL?: number;
 }
 
 /**
  * Create a precision module with the specified configuration
  */
 export function createPrecision(config: PrecisionConfiguration = {}) {
+  // Initialize cache if cache configuration is provided
+  let cache;
+  
+  if (config.cacheSize || config.cachePolicy || config.cacheTTL) {
+    // Create cache options based on configuration
+    const cacheOptions: any = {
+      maxSize: config.cacheSize || 1000,
+      policy: config.cachePolicy === 'lru' ? 'lru' :
+              config.cachePolicy === 'lfu' ? 'lfu' :
+              config.cachePolicy === 'fifo' ? 'fifo' :
+              config.cachePolicy === 'time' ? 'time' : 'lru'
+    };
+    
+    // Add TTL if specified
+    if (config.cacheTTL) {
+      cacheOptions.ttl = config.cacheTTL;
+    }
+    
+    // Create a cache factory with the specified options
+    const cacheFactory = verificationModule.createCacheFactory();
+    
+    // Create a default cache with the specified options
+    cache = cacheFactory.createCache(cacheOptions);
+  }
+  
   // Create a unified interface that includes all operations
   return {
     // Include all modules
@@ -154,6 +213,9 @@ export function createPrecision(config: PrecisionConfiguration = {}) {
     
     // Include the consolidated utilities
     MathUtilities,
+    
+    // Include cache if created
+    cache,
     
     // Provide module configuration
     config
