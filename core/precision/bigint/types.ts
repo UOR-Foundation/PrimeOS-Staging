@@ -24,14 +24,14 @@ export const BigIntConstants = {
   MIN_SAFE_INTEGER: BigInt(Number.MIN_SAFE_INTEGER),
   
   // Common mathematical constants as BigInt
-  ZERO: 0n,
-  ONE: 1n,
-  TWO: 2n,
-  NEGATIVE_ONE: -1n,
+  ZERO: BigInt(0),
+  ONE: BigInt(1),
+  TWO: BigInt(2),
+  NEGATIVE_ONE: -BigInt(1),
   
   // Common bit masks
-  MASK_32BIT: (1n << 32n) - 1n,
-  MASK_64BIT: (1n << 64n) - 1n,
+  MASK_32BIT: (BigInt(1) << BigInt(32)) - BigInt(1),
+  MASK_64BIT: (BigInt(1) << BigInt(64)) - BigInt(1),
   
   // Maximum number of bits for efficient operations in this implementation
   MAX_BITS: 4096

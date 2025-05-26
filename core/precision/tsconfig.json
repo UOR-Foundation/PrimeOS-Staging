@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["jest", "node"],
+    "baseUrl": "../..",
+    "paths": {
+      "@primeos/core/precision": ["./core/precision/index.ts"],
+      "@primeos/core/precision/*": ["./core/precision/*"],
+      "@primeos/os-model": ["./os/model/index.ts"],
+      "@primeos/os-logging": ["./os/logging/index.ts"],
+      "@primeos/os-tests": ["./os/os-tests/index.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "../../os/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "__mocks__/**/*"
+  ]
+}

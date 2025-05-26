@@ -44,12 +44,12 @@ describe('BigInt Mocks', () => {
     const mockBigInt = createMockBigInt();
     
     // Test some key operations with their default responses
-    expect(mockBigInt.bitLength(123456789n)).toBe(64);
-    expect(mockBigInt.exactlyEquals(42n, 42n)).toBe(true);
-    expect(mockBigInt.isProbablePrime(7n)).toBe(true);
+    expect(mockBigInt.bitLength(BigInt(123456789))).toBe(64);
+    expect(mockBigInt.exactlyEquals(BigInt(42), BigInt(42))).toBe(true);
+    expect(mockBigInt.isProbablePrime(BigInt(7))).toBe(true);
     
     // Test byte array conversion
-    const bytes = mockBigInt.toByteArray(123n);
+    const bytes = mockBigInt.toByteArray(BigInt(123));
     expect(bytes).toBeInstanceOf(Uint8Array);
     
     // Test random generation
@@ -57,13 +57,13 @@ describe('BigInt Mocks', () => {
     expect(typeof random).toBe('bigint');
     
     // Test bit operations
-    expect(mockBigInt.countLeadingZeros(16n)).toBe(32);
-    expect(mockBigInt.countTrailingZeros(16n)).toBe(0);
-    expect(mockBigInt.getBit(5n, 0)).toBe(0);
-    expect(typeof mockBigInt.setBit(5n, 3, 1)).toBe('bigint');
+    expect(mockBigInt.countLeadingZeros(BigInt(16))).toBe(32);
+    expect(mockBigInt.countTrailingZeros(BigInt(16))).toBe(0);
+    expect(mockBigInt.getBit(BigInt(5), 0)).toBe(0);
+    expect(typeof mockBigInt.setBit(BigInt(5), 3, 1)).toBe('bigint');
     
     // Test modular exponentiation
-    const result = mockBigInt.modPow(2n, 10n, 1000n);
+    const result = mockBigInt.modPow(BigInt(2), BigInt(10), BigInt(1000));
     expect(typeof result).toBe('bigint');
   });
   
@@ -73,7 +73,7 @@ describe('BigInt Mocks', () => {
     // Test handling different operation types through the process method
     const bitLengthResult = await mockBigInt.process({
       operation: 'bitLength',
-      params: [42n]
+      params: [BigInt(42)]
     });
     
     expect(bitLengthResult.success).toBe(true);
@@ -81,7 +81,7 @@ describe('BigInt Mocks', () => {
     
     const primalityResult = await mockBigInt.process({
       operation: 'isProbablePrime',
-      params: [17n]
+      params: [BigInt(17)]
     });
     
     expect(primalityResult.success).toBe(true);
@@ -94,7 +94,7 @@ describe('BigInt Mocks', () => {
     });
     
     expect(unknownResult.success).toBe(true);
-    expect(unknownResult.data).toBe(0n);
+    expect(unknownResult.data).toBe(BigInt(0));
   });
   
   it('can be initialized and terminated', async () => {
@@ -126,18 +126,18 @@ describe('BigInt Mocks', () => {
   it('exports constants correctly', () => {
     // Test that constants are exported
     expect(BIGINT_MOCK_CONSTANTS).toBeDefined();
-    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_ZERO).toBe(0n);
-    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_ONE).toBe(1n);
-    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_TWO).toBe(2n);
+    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_ZERO).toBe(BigInt(0));
+    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_ONE).toBe(BigInt(1));
+    expect(BIGINT_MOCK_CONSTANTS.DEFAULT_TWO).toBe(BigInt(2));
   });
   
   it('tracks metrics for testing', () => {
     const mockBigInt = createMockBigInt();
     
     // Perform some operations
-    mockBigInt.bitLength(123n);
-    mockBigInt.isProbablePrime(17n);
-    mockBigInt.isProbablePrime(19n);
+    mockBigInt.bitLength(BigInt(123));
+    mockBigInt.isProbablePrime(BigInt(17));
+    mockBigInt.isProbablePrime(BigInt(19));
     
     // Check metrics
     const metrics = mockBigInt._getMetrics();

@@ -21,7 +21,7 @@ import {
   VerificationModelInterface
 } from './index';
 
-import { ModelLifecycleState } from './__mocks__/os-model-mock';
+import { ModelLifecycleState } from '../__mocks__/os-model-mock';
 import { Factor } from '../types';
 
 // Mock the os/model and os/logging modules
@@ -31,31 +31,31 @@ jest.mock('../../../os/logging', () => require('./__mocks__/os-logging-mock'));
 // Mock the checksums module
 jest.mock('../checksums', () => ({
   extractFactorsAndChecksum: (value: bigint) => {
-    if (value === 42n) {
+    if (value === BigInt(42)) {
       return {
         coreFactors: [
-          { prime: 2n, exponent: 1 },
-          { prime: 3n, exponent: 1 },
-          { prime: 7n, exponent: 1 }
+          { prime: BigInt(2), exponent: 1 },
+          { prime: BigInt(3), exponent: 1 },
+          { prime: BigInt(7), exponent: 1 }
         ],
-        checksumPrime: 11n
+        checksumPrime: BigInt(11)
       };
-    } else if (value === 30n) {
+    } else if (value === BigInt(30)) {
       return {
         coreFactors: [
-          { prime: 2n, exponent: 1 },
-          { prime: 3n, exponent: 1 },
-          { prime: 5n, exponent: 1 }
+          { prime: BigInt(2), exponent: 1 },
+          { prime: BigInt(3), exponent: 1 },
+          { prime: BigInt(5), exponent: 1 }
         ],
-        checksumPrime: 7n
+        checksumPrime: BigInt(7)
       };
-    } else if (value === 100n) {
+    } else if (value === BigInt(100)) {
       return {
         coreFactors: [
-          { prime: 2n, exponent: 2 },
-          { prime: 5n, exponent: 2 }
+          { prime: BigInt(2), exponent: 2 },
+          { prime: BigInt(5), exponent: 2 }
         ],
-        checksumPrime: 13n
+        checksumPrime: BigInt(13)
       };
     } else {
       throw new Error('Invalid value for testing');
@@ -64,41 +64,44 @@ jest.mock('../checksums', () => ({
   calculateChecksum: (factors: Factor[]) => {
     // Simple mock implementation for testing
     if (factors.length === 3 && 
-        factors[0].prime === 2n && 
-        factors[1].prime === 3n && 
-        factors[2].prime === 7n) {
-      return 11n;
+        factors[0].prime === BigInt(2) && 
+        factors[1].prime === BigInt(3) && 
+        factors[2].prime === BigInt(7)) {
+      return BigInt(11);
     } else if (factors.length === 3 && 
-               factors[0].prime === 2n && 
-               factors[1].prime === 3n && 
-               factors[2].prime === 5n) {
-      return 7n;
+               factors[0].prime === BigInt(2) && 
+               factors[1].prime === BigInt(3) && 
+               factors[2].prime === BigInt(5)) {
+      return BigInt(7);
     } else if (factors.length === 2 && 
-               factors[0].prime === 2n && 
-               factors[1].prime === 5n) {
-      return 13n;
+               factors[0].prime === BigInt(2) && 
+               factors[1].prime === BigInt(5)) {
+      return BigInt(13);
     }
-    return 0n;
+    return BigInt(0);
   }
 }));
 
 // Import mocks from test-mock.ts
-import { mockPrimeRegistry } from './__mocks__/test-mock';
+import { createMockPrimeRegistry } from '../__mocks__/test-mock';
+
+// Create a mock prime registry for testing
+const mockPrimeRegistry = createMockPrimeRegistry();
 
 // These mocks are already defined at the top of the file
 
 describe('Verification Module', () => {
   describe('Basic functionality', () => {
     test('verifyValue validates checksums correctly', () => {
-      const result = verifyValue(42n, mockPrimeRegistry);
+      const result = verifyValue(BigInt(42), mockPrimeRegistry);
       
       expect(result.valid).toBe(true);
       expect(result.coreFactors).toHaveLength(3);
-      expect(result.checksumPrime).toBe(11n);
+      expect(result.checksumPrime).toBe(BigInt(11));
     });
     
     test('verifyValues validates multiple values', () => {
-      const results = verifyValues([42n, 30n], mockPrimeRegistry);
+      const results = verifyValues([BigInt(42), BigInt(30)], mockPrimeRegistry);
       
       expect(results).toHaveLength(2);
       expect(results[0].valid).toBe(true);
@@ -108,11 +111,11 @@ describe('Verification Module', () => {
     test('createOptimizedVerifier returns a function that validates correctly', () => {
       const isValid = createOptimizedVerifier(mockPrimeRegistry);
       
-      expect(isValid(42n)).toBe(true);
-      expect(isValid(30n)).toBe(true);
+      expect(isValid(BigInt(42))).toBe(true);
+      expect(isValid(BigInt(30))).toBe(true);
       
       // Test caching - second call should use cache
-      expect(isValid(42n)).toBe(true);
+      expect(isValid(BigInt(42))).toBe(true);
     });
     
     test('getStatus returns the correct verification status', () => {
@@ -123,7 +126,7 @@ describe('Verification Module', () => {
       expect(getStatus()).toBe(VerificationStatus.UNKNOWN);
       
       // After verifying a valid value, should be VALID
-      verifyValue(42n, mockPrimeRegistry);
+      verifyValue(BigInt(42), mockPrimeRegistry);
       expect(getStatus()).toBe(VerificationStatus.VALID);
     });
     
@@ -132,8 +135,8 @@ describe('Verification Module', () => {
       resetVerification();
       
       // Verify some values
-      verifyValue(42n, mockPrimeRegistry);
-      verifyValue(30n, mockPrimeRegistry);
+      verifyValue(BigInt(42), mockPrimeRegistry);
+      verifyValue(BigInt(30), mockPrimeRegistry);
       
       // Get results
       const results = getResults();
@@ -145,8 +148,8 @@ describe('Verification Module', () => {
     
     test('resetVerification clears verification results', () => {
       // Verify some values
-      verifyValue(42n, mockPrimeRegistry);
-      verifyValue(30n, mockPrimeRegistry);
+      verifyValue(BigInt(42), mockPrimeRegistry);
+      verifyValue(BigInt(30), mockPrimeRegistry);
       
       // Reset
       resetVerification();
@@ -161,13 +164,13 @@ describe('Verification Module', () => {
       const verification = createVerification({ enableCache: true });
       
       // Verify a value to populate the cache
-      verification.verifyValue(42n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
       
       // Clear the cache
       verification.clearCache();
       
       // Verify the same value again - should not use cache
-      verification.verifyValue(42n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
       
       // Check state
       const state = verification.getState();
@@ -208,7 +211,7 @@ describe('Verification Module', () => {
       // Test verifyValue operation
       const result = await verification.process({
         operation: 'verifyValue',
-        params: [42n, mockPrimeRegistry]
+        params: [BigInt(42), mockPrimeRegistry]
       });
       
       // The result should be a ModelResult with data containing a VerificationResult
@@ -227,8 +230,8 @@ describe('Verification Module', () => {
       });
       
       // Perform some operations to update state
-      verification.verifyValue(42n, mockPrimeRegistry);
-      verification.verifyValue(30n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
+      verification.verifyValue(BigInt(30), mockPrimeRegistry);
       
       // Get state
       const state = verification.getState();
@@ -249,8 +252,8 @@ describe('Verification Module', () => {
       const verification = await createAndInitializeVerification();
       
       // Perform some operations
-      verification.verifyValue(42n, mockPrimeRegistry);
-      verification.verifyValue(30n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
+      verification.verifyValue(BigInt(30), mockPrimeRegistry);
       
       // Reset
       await verification.reset();
@@ -281,17 +284,17 @@ describe('Verification Module', () => {
       // Mock a failing verification
       jest.spyOn(verification, 'verifyValue').mockImplementationOnce(() => ({
         coreFactors: [],
-        checksumPrime: 0n,
+        checksumPrime: BigInt(0),
         valid: false,
         error: {
-          expected: 0n,
-          actual: 0n,
+          expected: BigInt(0),
+          actual: BigInt(0),
           message: 'Test failure'
         }
       }));
       
       // Verify multiple values
-      const results = verification.verifyValues([42n, 30n], mockPrimeRegistry);
+      const results = verification.verifyValues([BigInt(42), BigInt(30)], mockPrimeRegistry);
       
       // Should only have one result due to failFast
       expect(results).toHaveLength(1);
@@ -303,10 +306,10 @@ describe('Verification Module', () => {
       const verification = createVerification({ enableCache: true });
       
       // Verify a value
-      verification.verifyValue(42n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
       
       // Verify the same value again - should use cache
-      verification.verifyValue(42n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
       
       // Check state
       const state = verification.getState();
@@ -321,7 +324,7 @@ describe('Verification Module', () => {
       const logger = (verification as any).logger;
       
       // Verify a value
-      verification.verifyValue(42n, mockPrimeRegistry);
+      verification.verifyValue(BigInt(42), mockPrimeRegistry);
       
       // Debug should have been called
       expect(logger.debug).toHaveBeenCalled();
@@ -337,7 +340,7 @@ describe('Verification Module', () => {
         .toThrow('Validation Error');
         
       // @ts-ignore - Testing runtime behavior
-      expect(() => verification.verifyValue(42n, null))
+      expect(() => verification.verifyValue(BigInt(42), null))
         .toThrow('Validation Error');
     });
     
@@ -345,7 +348,7 @@ describe('Verification Module', () => {
       const verification = createVerification();
       
       // @ts-ignore - Testing runtime behavior
-      expect(() => verification.verifyValue(42n, { invalid: 'registry' }))
+      expect(() => verification.verifyValue(BigInt(42), { invalid: 'registry' }))
         .toThrow('Validation Error: Invalid prime registry interface');
     });
     
@@ -386,12 +389,12 @@ describe('Verification Module', () => {
         }
         return {
           coreFactors: [],
-          checksumPrime: 11n,
+          checksumPrime: BigInt(11),
           valid: true
         };
       });
       
-      const result = await verification.verifyValueWithRetry(42n, mockPrimeRegistry);
+      const result = await verification.verifyValueWithRetry(BigInt(42), mockPrimeRegistry);
       expect(result.valid).toBe(true);
       expect(attempts).toBe(3);
     });
@@ -427,7 +430,7 @@ describe('Verification Module', () => {
       const verifier = verification.createOptimizedVerifierWithRetry(mockPrimeRegistry);
       
       // Test it
-      const result = await verifier(42n);
+      const result = await verifier(BigInt(42));
       expect(result).toBe(true);
       expect(attempts).toBe(3);
     });

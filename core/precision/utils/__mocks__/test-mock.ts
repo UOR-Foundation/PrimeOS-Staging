@@ -16,7 +16,7 @@ import {
 } from '../types';
 
 import { ModelLifecycleState, ModelResult } from '../../../../os/model/types';
-import { createLoggingMock } from './os-logging-mock';
+import { createLogging } from './os-logging-mock';
 
 /**
  * Default constants for MathUtils mock implementation
@@ -24,8 +24,8 @@ import { createLoggingMock } from './os-logging-mock';
 export const UTILS_MOCK_CONSTANTS = {
   DEFAULT_BIT_LENGTH: 32,
   DEFAULT_EQUALS_RESULT: true,
-  DEFAULT_ZERO: 0n,
-  DEFAULT_ONE: 1n
+  DEFAULT_ZERO: BigInt(0),
+  DEFAULT_ONE: BigInt(1)
 };
 
 /**
@@ -50,7 +50,7 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
     cacheMisses: 0
   };
   
-  return {
+  const mockUtils: MockMathUtilsInterface = {
     bitLength: jest.fn().mockImplementation((value) => {
       metrics.operationCount++;
       
@@ -74,7 +74,7 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
       
       if (typeof value === 'bigint') {
         // Simplified implementation for mock
-        view.setBigUint64(0, value > 0n ? value : -value);
+        view.setBigUint64(0, value > BigInt(0) ? value : -value);
       } else {
         view.setFloat64(0, value);
       }
@@ -87,14 +87,14 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
       
       // Simple implementation for mock
       if (bytes.length === 0) {
-        return 0n;
+        return BigInt(0);
       }
       
       // Check if this is a negative value (has an extra 0xFF byte at the end)
       const isNegative = bytes.length >= 2 && bytes[bytes.length - 1] === 0xFF;
       
       // For simplicity, return a fixed value based on negativity
-      return isNegative ? -1n : 1n;
+      return isNegative ? -BigInt(1) : BigInt(1);
     }),
     
     isSafeInteger: jest.fn().mockImplementation((value) => {
@@ -113,8 +113,8 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
       if (typeof value === 'number') {
         return Math.sign(value);
       }
-      if (value < 0n) return -1;
-      if (value > 0n) return 1;
+      if (value < BigInt(0)) return -1;
+      if (value > BigInt(0)) return 1;
       return 0;
     }),
     
@@ -124,7 +124,7 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
       if (typeof value === 'number') {
         return Math.abs(value);
       }
-      return value < 0n ? -value : value;
+      return value < BigInt(0) ? -value : value;
     }),
     
     isPowerOfTwo: jest.fn().mockImplementation((value) => {
@@ -133,12 +133,82 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
       if (typeof value === 'number') {
         return value > 0 && (value & (value - 1)) === 0;
       }
-      return value > 0n && (value & (value - 1n)) === 0n;
+      return value > BigInt(0) && (value & (value - BigInt(1))) === BigInt(0);
+    }),
+    
+    // Additional math utilities
+    gcd: jest.fn().mockImplementation((a, b) => {
+      metrics.operationCount++;
+      // Simple GCD implementation for mock
+      while (b !== BigInt(0)) {
+        const temp = b;
+        b = a % b;
+        a = temp;
+      }
+      return a;
+    }),
+    
+    lcm: jest.fn().mockImplementation((a, b) => {
+      metrics.operationCount++;
+      return (a * b) / mockUtils.gcd(a, b);
+    }),
+    
+    extendedGcd: jest.fn().mockImplementation((a, b) => {
+      metrics.operationCount++;
+      // Simple implementation for mock
+      return [mockUtils.gcd(a, b), BigInt(1), BigInt(0)];
+    }),
+    
+    integerSqrt: jest.fn().mockImplementation((n) => {
+      metrics.operationCount++;
+      // Simple implementation for mock
+      if (n < BigInt(0)) throw new Error('Cannot compute square root of negative number');
+      if (n === BigInt(0)) return BigInt(0);
+      return BigInt(1); // Simplified for mock
+    }),
+    
+    ceilDiv: jest.fn().mockImplementation((a, b) => {
+      metrics.operationCount++;
+      return (a + b - BigInt(1)) / b;
+    }),
+    
+    floorDiv: jest.fn().mockImplementation((a, b) => {
+      metrics.operationCount++;
+      return a / b;
+    }),
+    
+    countSetBits: jest.fn().mockImplementation((n) => {
+      metrics.operationCount++;
+      let count = 0;
+      while (n > BigInt(0)) {
+        count += Number(n & BigInt(1));
+        n >>= BigInt(1);
+      }
+      return count;
+    }),
+    
+    leadingZeros: jest.fn().mockImplementation((n) => {
+      metrics.operationCount++;
+      // Simplified for mock - assume 64-bit
+      return 64 - mockUtils.bitLength(n);
+    }),
+    
+    trailingZeros: jest.fn().mockImplementation((n) => {
+      metrics.operationCount++;
+      if (n === BigInt(0)) return 64; // Assume 64-bit
+      let count = 0;
+      while ((n & BigInt(1)) === BigInt(0)) {
+        count++;
+        n >>= BigInt(1);
+      }
+      return count;
     }),
     
     // Additional testing utilities
     _getMetrics: () => ({ ...metrics })
   };
+  
+  return mockUtils;
 }
 
 /**
@@ -181,7 +251,7 @@ export function createMockMathUtilsModel(options: MathUtilsModelOptions = {}): M
   };
   
   // Create a logger
-  const logger = createLoggingMock();
+  const logger = createLogging({ name: options.name || 'mock-utils' });
   
   return {
     // Include all MathUtils methods

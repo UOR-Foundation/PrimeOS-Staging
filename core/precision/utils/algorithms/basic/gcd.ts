@@ -27,11 +27,11 @@ export function createGcdFunctions(options: UtilityOptions = {}) {
     let bBig = typeof b === 'number' ? BigInt(Math.floor(b)) : b;
     
     // Handle negative numbers by taking absolute values
-    aBig = aBig < 0n ? -aBig : aBig;
-    bBig = bBig < 0n ? -bBig : bBig;
+    aBig = aBig < BigInt(0) ? -aBig : aBig;
+    bBig = bBig < BigInt(0) ? -bBig : bBig;
     
     // Iterative Euclidean algorithm
-    while (bBig !== 0n) {
+    while (bBig !== BigInt(0)) {
       const temp = bBig;
       bBig = aBig % bBig;
       aBig = temp;
@@ -49,11 +49,11 @@ export function createGcdFunctions(options: UtilityOptions = {}) {
     const bBig = typeof b === 'number' ? BigInt(Math.floor(b)) : b;
     
     // Handle zero inputs
-    if (aBig === 0n || bBig === 0n) return 0n;
+    if (aBig === BigInt(0) || bBig === BigInt(0)) return BigInt(0);
     
     // Handle negative numbers by taking absolute values
-    const aAbs = aBig < 0n ? -aBig : aBig;
-    const bAbs = bBig < 0n ? -bBig : bBig;
+    const aAbs = aBig < BigInt(0) ? -aBig : aBig;
+    const bAbs = bBig < BigInt(0) ? -bBig : bBig;
     
     // LCM formula: |a*b| / gcd(a,b)
     const gcdVal = gcd(aAbs, bAbs);
@@ -71,19 +71,19 @@ export function createGcdFunctions(options: UtilityOptions = {}) {
     let bBig = typeof b === 'number' ? BigInt(Math.floor(b)) : b;
     
     // Handle zero inputs
-    if (aBig === 0n) return [bBig, 0n, 1n];
-    if (bBig === 0n) return [aBig, 1n, 0n];
+    if (aBig === BigInt(0)) return [bBig, BigInt(0), BigInt(1)];
+    if (bBig === BigInt(0)) return [aBig, BigInt(1), BigInt(0)];
     
     // Initialize coefficients
-    let s = 0n;
-    let oldS = 1n;
-    let t = 1n;
-    let oldT = 0n;
+    let s = BigInt(0);
+    let oldS = BigInt(1);
+    let t = BigInt(1);
+    let oldT = BigInt(0);
     let r = bBig;
     let oldR = aBig;
     
     // Iterative Extended Euclidean algorithm
-    while (r !== 0n) {
+    while (r !== BigInt(0)) {
       const quotient = oldR / (r as bigint);
       
       // Update remainders
@@ -103,7 +103,7 @@ export function createGcdFunctions(options: UtilityOptions = {}) {
     }
     
     // Ensure the GCD is positive
-    if (oldR < 0n) {
+    if (oldR < BigInt(0)) {
       oldR = -oldR;
       oldS = -oldS;
       oldT = -oldT;

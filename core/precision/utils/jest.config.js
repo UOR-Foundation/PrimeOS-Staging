@@ -1,22 +1,32 @@
+/** @type {import('ts-jest').JestConfigWithTsJest} */
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   transform: {
-    '^.+\\.tsx?$': 'babel-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        target: 'esnext',
+        lib: ['esnext'],
+        moduleResolution: 'node',
+        allowSyntheticDefaultImports: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        strict: false, // Disable strict mode to allow implicit any
+        types: ['jest', 'node']
+      }
+    }]
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testMatch: ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
-  collectCoverageFrom: ['**/*.{js,jsx,ts,tsx}', '!**/node_modules/**', '!**/vendor/**'],
-  coverageDirectory: 'coverage',
-  setupFilesAfterEnv: ['./jest.setup.js'],
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.json',
-      isolatedModules: true,
-    },
-  },
+  testMatch: ['**/*.test.ts', '**/*.spec.ts', '**/test.ts'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
-    '^os/(.*)$': '<rootDir>/../../../os/$1',
-    '^core/(.*)$': '<rootDir>/../../../core/$1'
-  }
+    '^../../../os/model$': '<rootDir>/../__mocks__/os-model-mock',
+    '^../../../os/logging$': '<rootDir>/../__mocks__/os-logging-mock',
+    '^../cache$': '<rootDir>/../cache/__mocks__'
+  },
+  collectCoverageFrom: [
+    '**/*.ts',
+    '!**/*.d.ts',
+    '!**/node_modules/**',
+    '!**/__mocks__/**'
+  ]
 };

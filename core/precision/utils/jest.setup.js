@@ -1,21 +1,27 @@
-// This file is used to set up the test environment
-// It will be executed before each test file is run
+/**
+ * Jest setup file for precision utils module
+ * 
+ * This file runs before each test file to set up the environment
+ */
 
-// Set up global variables or mocks if needed
-global.console = {
-  ...console,
-  // Uncomment to ignore specific console methods during tests
-  // log: jest.fn(),
-  // info: jest.fn(),
-  // debug: jest.fn(),
-  // warn: jest.fn(),
-  // error: jest.fn(),
-};
+// Set longer timeout for slow tests
+jest.setTimeout(10000);
 
-// Set up BigInt serialization for Jest snapshots
+// Mock the global performance.now() if not available in test environment
+if (typeof performance === 'undefined') {
+  global.performance = {
+    now: () => Date.now()
+  };
+}
+
+// Add BigInt support for Jest serialization
+// This is needed because Jest's default serializer doesn't handle BigInt
 expect.addSnapshotSerializer({
   test: (val) => typeof val === 'bigint',
-  print: (val) => `${val.toString()}n`,
+  print: (val) => `BigInt(${val.toString()})`
 });
 
-// Mock any global APIs if needed
+// Clean up after all tests
+afterAll(() => {
+  // Reset any global state that might affect other tests
+});

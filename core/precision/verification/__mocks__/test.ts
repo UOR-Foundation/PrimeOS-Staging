@@ -13,89 +13,89 @@ import {
 describe('Verification Module Test Mocks', () => {
   describe('Mock Prime Registry', () => {
     test('getPrime returns expected values', () => {
-      expect(mockPrimeRegistry.getPrime(0)).toBe(3n);
-      expect(mockPrimeRegistry.getPrime(1)).toBe(5n);
-      expect(mockPrimeRegistry.getPrime(2)).toBe(7n);
-      expect(mockPrimeRegistry.getPrime(3)).toBe(9n);
+      expect(mockPrimeRegistry.getPrime(0)).toBe(BigInt(3));
+      expect(mockPrimeRegistry.getPrime(1)).toBe(BigInt(5));
+      expect(mockPrimeRegistry.getPrime(2)).toBe(BigInt(7));
+      expect(mockPrimeRegistry.getPrime(3)).toBe(BigInt(9));
     });
     
     test('getIndex returns expected values', () => {
-      expect(mockPrimeRegistry.getIndex(3n)).toBe(0);
-      expect(mockPrimeRegistry.getIndex(5n)).toBe(1);
-      expect(mockPrimeRegistry.getIndex(7n)).toBe(2);
+      expect(mockPrimeRegistry.getIndex(BigInt(3))).toBe(0);
+      expect(mockPrimeRegistry.getIndex(BigInt(5))).toBe(1);
+      expect(mockPrimeRegistry.getIndex(BigInt(7))).toBe(2);
     });
     
     test('factor returns expected factors', () => {
-      const factors42 = mockPrimeRegistry.factor(42n);
+      const factors42 = mockPrimeRegistry.factor(BigInt(42));
       expect(factors42).toHaveLength(3);
-      expect(factors42[0].prime).toBe(2n);
+      expect(factors42[0].prime).toBe(BigInt(2));
       expect(factors42[0].exponent).toBe(1);
-      expect(factors42[1].prime).toBe(3n);
+      expect(factors42[1].prime).toBe(BigInt(3));
       expect(factors42[1].exponent).toBe(1);
-      expect(factors42[2].prime).toBe(7n);
+      expect(factors42[2].prime).toBe(BigInt(7));
       expect(factors42[2].exponent).toBe(1);
       
-      const factors30 = mockPrimeRegistry.factor(30n);
+      const factors30 = mockPrimeRegistry.factor(BigInt(30));
       expect(factors30).toHaveLength(3);
-      expect(factors30[0].prime).toBe(2n);
+      expect(factors30[0].prime).toBe(BigInt(2));
       expect(factors30[0].exponent).toBe(1);
-      expect(factors30[1].prime).toBe(3n);
+      expect(factors30[1].prime).toBe(BigInt(3));
       expect(factors30[1].exponent).toBe(1);
-      expect(factors30[2].prime).toBe(5n);
+      expect(factors30[2].prime).toBe(BigInt(5));
       expect(factors30[2].exponent).toBe(1);
       
       // Unknown value returns empty array
-      const factorsUnknown = mockPrimeRegistry.factor(99n);
+      const factorsUnknown = mockPrimeRegistry.factor(BigInt(99));
       expect(factorsUnknown).toHaveLength(0);
     });
   });
   
   describe('Mock Checksums', () => {
     test('extractFactorsAndChecksum returns expected values', () => {
-      const result42 = mockChecksums.extractFactorsAndChecksum(42n);
+      const result42 = mockChecksums.extractFactorsAndChecksum(BigInt(42));
       expect(result42.coreFactors).toHaveLength(3);
-      expect(result42.checksumPrime).toBe(11n);
+      expect(result42.checksumPrime).toBe(BigInt(11));
       
-      const result30 = mockChecksums.extractFactorsAndChecksum(30n);
+      const result30 = mockChecksums.extractFactorsAndChecksum(BigInt(30));
       expect(result30.coreFactors).toHaveLength(3);
-      expect(result30.checksumPrime).toBe(7n);
+      expect(result30.checksumPrime).toBe(BigInt(7));
       
-      const result100 = mockChecksums.extractFactorsAndChecksum(100n);
+      const result100 = mockChecksums.extractFactorsAndChecksum(BigInt(100));
       expect(result100.coreFactors).toHaveLength(2);
-      expect(result100.checksumPrime).toBe(13n);
+      expect(result100.checksumPrime).toBe(BigInt(13));
     });
     
     test('extractFactorsAndChecksum throws for unknown values', () => {
-      expect(() => mockChecksums.extractFactorsAndChecksum(99n)).toThrow();
+      expect(() => mockChecksums.extractFactorsAndChecksum(BigInt(99))).toThrow();
     });
     
     test('calculateChecksum returns expected values', () => {
       const checksum1 = mockChecksums.calculateChecksum([
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 7n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(7), exponent: 1 }
       ]);
-      expect(checksum1).toBe(11n);
+      expect(checksum1).toBe(BigInt(11));
       
       const checksum2 = mockChecksums.calculateChecksum([
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ]);
-      expect(checksum2).toBe(7n);
+      expect(checksum2).toBe(BigInt(7));
       
       const checksum3 = mockChecksums.calculateChecksum([
-        { prime: 2n, exponent: 2 },
-        { prime: 5n, exponent: 2 }
+        { prime: BigInt(2), exponent: 2 },
+        { prime: BigInt(5), exponent: 2 }
       ]);
-      expect(checksum3).toBe(13n);
+      expect(checksum3).toBe(BigInt(13));
       
-      // Unknown combination returns 0n
+      // Unknown combination returns BigInt(0)
       const checksumUnknown = mockChecksums.calculateChecksum([
-        { prime: 11n, exponent: 1 },
-        { prime: 13n, exponent: 1 }
+        { prime: BigInt(11), exponent: 1 },
+        { prime: BigInt(13), exponent: 1 }
       ]);
-      expect(checksumUnknown).toBe(0n);
+      expect(checksumUnknown).toBe(BigInt(0));
     });
   });
   
@@ -110,8 +110,8 @@ describe('Verification Module Test Mocks', () => {
     test('mockErrorResult contains expected error information', () => {
       expect(mockErrorResult.valid).toBe(false);
       expect(mockErrorResult.error).toBeDefined();
-      expect(mockErrorResult.error?.expected).toBe(11n);
-      expect(mockErrorResult.error?.actual).toBe(13n);
+      expect(mockErrorResult.error?.expected).toBe(BigInt(11));
+      expect(mockErrorResult.error?.actual).toBe(BigInt(13));
       expect(mockErrorResult.error?.message).toBe('Checksum verification failed');
     });
   });

@@ -27,14 +27,14 @@ describe('Modular Arithmetic Module', () => {
   describe('mod function', () => {
     test('standard modulo operations', () => {
       // Basic positive cases
-      expect(mod(10, 3)).toBe(1n);
-      expect(mod(10n, 3n)).toBe(1n);
-      expect(mod(10, 3n)).toBe(1n);
-      expect(mod(10n, 3)).toBe(1n);
+      expect(mod(10, 3)).toBe(BigInt(1));
+      expect(mod(BigInt(10), BigInt(3))).toBe(BigInt(1));
+      expect(mod(10, BigInt(3))).toBe(BigInt(1));
+      expect(mod(BigInt(10), 3)).toBe(BigInt(1));
       
       // Zero modulus should throw
       expect(() => mod(5, 0)).toThrow();
-      expect(() => mod(5n, 0n)).toThrow();
+      expect(() => mod(BigInt(5), BigInt(0))).toThrow();
     });
 
 describe('Model Interface', () => {
@@ -66,7 +66,7 @@ describe('Model Interface', () => {
       params: [10, 3]
     });
     
-    expect(modResult.data).toBe(1n);
+    expect(modResult.data).toBe(BigInt(1));
     
     // Test modPow operation
     const powResult = await modular.process({
@@ -74,7 +74,7 @@ describe('Model Interface', () => {
       params: [2, 10, 1000]
     });
     
-    expect(powResult.data).toBe(24n);
+    expect(powResult.data).toBe(BigInt(24));
     
     // Clean up
     await modular.terminate();
@@ -85,7 +85,7 @@ describe('Model Interface', () => {
     
     // Perform some operations to update state
     modular.modInverse(3, 11);
-    modular.gcd(48n, 18n);
+    modular.gcd(BigInt(48), BigInt(18));
     
     // Get state
     const state = modular.getState();
@@ -102,165 +102,165 @@ describe('Model Interface', () => {
     
     test('Python-compatible modulo with negative numbers', () => {
       // Negative numbers should behave like Python
-      expect(mod(-5, 3)).toBe(1n);  // In JS: -5 % 3 = -2
-      expect(mod(-5n, 3n)).toBe(1n);
-      expect(mod(-15, 4)).toBe(1n); // In JS: -15 % 4 = -3
-      expect(mod(-15n, 4n)).toBe(1n);
+      expect(mod(-5, 3)).toBe(BigInt(1));  // In JS: -5 % 3 = -2
+      expect(mod(-BigInt(5), BigInt(3))).toBe(BigInt(1));
+      expect(mod(-15, 4)).toBe(BigInt(1)); // In JS: -15 % 4 = -3
+      expect(mod(-BigInt(15), BigInt(4))).toBe(BigInt(1));
     });
     
     test('Edge cases', () => {
       // Modulo with large numbers
-      expect(mod(9007199254740991n, 10n)).toBe(1n); // MAX_SAFE_INTEGER % 10
+      expect(mod(BigInt(9007199254740991), BigInt(10))).toBe(BigInt(1)); // MAX_SAFE_INTEGER % 10
       
       // Zero modulo
-      expect(mod(0, 5)).toBe(0n);
-      expect(mod(0n, 5n)).toBe(0n);
+      expect(mod(0, 5)).toBe(BigInt(0));
+      expect(mod(BigInt(0), BigInt(5))).toBe(BigInt(0));
       
       // Negative modulus should be handled
-      expect(mod(10, -3)).toBe(1n);  // Should normalize the modulus
-      expect(mod(10n, -3n)).toBe(1n);
+      expect(mod(10, -3)).toBe(BigInt(1));  // Should normalize the modulus
+      expect(mod(BigInt(10), -BigInt(3))).toBe(BigInt(1));
     });
   });
   
   describe('modPow function', () => {
     test('basic modular exponentiation', () => {
-      expect(modPow(2, 10, 1000)).toBe(24n);  // 2^10 % 1000 = 1024 % 1000 = 24
-      expect(modPow(2n, 10n, 1000n)).toBe(24n);
-      expect(modPow(3, 4, 10)).toBe(1n);     // 3^4 % 10 = 81 % 10 = 1
-      expect(modPow(3n, 4n, 10n)).toBe(1n);
+      expect(modPow(2, 10, 1000)).toBe(BigInt(24));  // 2^10 % 1000 = 1024 % 1000 = 24
+      expect(modPow(BigInt(2), BigInt(10), BigInt(1000))).toBe(BigInt(24));
+      expect(modPow(3, 4, 10)).toBe(BigInt(1));     // 3^4 % 10 = 81 % 10 = 1
+      expect(modPow(BigInt(3), BigInt(4), BigInt(10))).toBe(BigInt(1));
     });
     
     test('handles negative exponents', () => {
       // 2^(-1) mod 11 = 6 (inverse of 2 modulo 11)
-      expect(modPow(2, -1, 11)).toBe(6n);
-      expect(modPow(2n, -1n, 11n)).toBe(6n);
+      expect(modPow(2, -1, 11)).toBe(BigInt(6));
+      expect(modPow(BigInt(2), -BigInt(1), BigInt(11))).toBe(BigInt(6));
     });
     
     test('edge cases', () => {
       // Modulo 1 always returns 0
-      expect(modPow(5, 20, 1)).toBe(0n);
-      expect(modPow(5n, 20n, 1n)).toBe(0n);
+      expect(modPow(5, 20, 1)).toBe(BigInt(0));
+      expect(modPow(BigInt(5), BigInt(20), BigInt(1))).toBe(BigInt(0));
       
       // Power of 0 returns 1
-      expect(modPow(5, 0, 7)).toBe(1n);
-      expect(modPow(5n, 0n, 7n)).toBe(1n);
+      expect(modPow(5, 0, 7)).toBe(BigInt(1));
+      expect(modPow(BigInt(5), BigInt(0), BigInt(7))).toBe(BigInt(1));
       
       // Base of 0 returns 0
-      expect(modPow(0, 5, 7)).toBe(0n);
-      expect(modPow(0n, 5n, 7n)).toBe(0n);
+      expect(modPow(0, 5, 7)).toBe(BigInt(0));
+      expect(modPow(BigInt(0), BigInt(5), BigInt(7))).toBe(BigInt(0));
     });
     
     test('works with large numbers', () => {
       // Use large exponent that would overflow without modular reduction
-      expect(modPow(2n, 100n, 1000n)).toBe(376n);  // 2^100 % 1000 = 376
+      expect(modPow(BigInt(2), BigInt(100), BigInt(1000))).toBe(BigInt(376));  // 2^100 % 1000 = 376
     });
   });
   
   describe('modInverse function', () => {
     test('basic modular inverse', () => {
-      expect(modInverse(3, 11)).toBe(4n);  // 3*4 = 12 ≡ 1 (mod 11)
-      expect(modInverse(3n, 11n)).toBe(4n);
+      expect(modInverse(3, 11)).toBe(BigInt(4));  // 3*4 = 12 ≡ 1 (mod 11)
+      expect(modInverse(BigInt(3), BigInt(11))).toBe(BigInt(4));
       
-      expect(modInverse(7, 20)).toBe(3n);  // 7*3 = 21 ≡ 1 (mod 20)
-      expect(modInverse(7n, 20n)).toBe(3n);
+      expect(modInverse(7, 20)).toBe(BigInt(3));  // 7*3 = 21 ≡ 1 (mod 20)
+      expect(modInverse(BigInt(7), BigInt(20))).toBe(BigInt(3));
     });
     
     test('handles error cases', () => {
       // No modular inverse exists when gcd(a, m) > 1
       expect(() => modInverse(2, 4)).toThrow();  // gcd(2, 4) = 2
-      expect(() => modInverse(2n, 4n)).toThrow();
+      expect(() => modInverse(BigInt(2), BigInt(4))).toThrow();
       
       // Zero has no modular inverse
       expect(() => modInverse(0, 5)).toThrow();
-      expect(() => modInverse(0n, 5n)).toThrow();
+      expect(() => modInverse(BigInt(0), BigInt(5))).toThrow();
       
       // Cannot find inverse with modulo 0
       expect(() => modInverse(3, 0)).toThrow();
-      expect(() => modInverse(3n, 0n)).toThrow();
+      expect(() => modInverse(BigInt(3), BigInt(0))).toThrow();
     });
     
     test('works with large numbers', () => {
-      expect(modInverse(17n, 101n)).toBe(6n);  // 17*6 = 102 ≡ 1 (mod 101)
+      expect(modInverse(BigInt(17), BigInt(101))).toBe(BigInt(6));  // 17*6 = 102 ≡ 1 (mod 101)
     });
   });
   
   describe('modMul function', () => {
     test('basic modular multiplication', () => {
-      expect(modMul(7, 8, 13)).toBe(4n);  // 7*8 = 56 ≡ 4 (mod 13)
-      expect(modMul(7n, 8n, 13n)).toBe(4n);
+      expect(modMul(7, 8, 13)).toBe(BigInt(4));  // 7*8 = 56 ≡ 4 (mod 13)
+      expect(modMul(BigInt(7), BigInt(8), BigInt(13))).toBe(BigInt(4));
     });
     
     test('handles overflow cases', () => {
       // Large numbers that would overflow standard multiplication
-      const a = 9007199254740990n;  // Close to MAX_SAFE_INTEGER
-      const b = 9007199254740990n;
-      const m = 97n;
+      const a = BigInt(9007199254740990);  // Close to MAX_SAFE_INTEGER
+      const b = BigInt(9007199254740990);
+      const m = BigInt(97);
       
       // (a * b) % m would overflow without special handling
-      expect(modMul(a, b, m)).toBe(27n);
+      expect(modMul(a, b, m)).toBe(BigInt(27));
     });
     
     test('handles negative operands', () => {
-      expect(modMul(-7, 8, 13)).toBe(9n);  // -7*8 = -56 ≡ 9 (mod 13)
-      expect(modMul(7, -8, 13)).toBe(9n);  // 7*(-8) = -56 ≡ 9 (mod 13)
-      expect(modMul(-7, -8, 13)).toBe(4n); // (-7)*(-8) = 56 ≡ 4 (mod 13)
+      expect(modMul(-7, 8, 13)).toBe(BigInt(9));  // -7*8 = -56 ≡ 9 (mod 13)
+      expect(modMul(7, -8, 13)).toBe(BigInt(9));  // 7*(-8) = -56 ≡ 9 (mod 13)
+      expect(modMul(-7, -8, 13)).toBe(BigInt(4)); // (-7)*(-8) = 56 ≡ 4 (mod 13)
     });
   });
   
   describe('extendedGcd function', () => {
     test('calculates correct Bézout coefficients', () => {
       // gcd(35, 15) = 5 = 35*(-1) + 15*3
-      const [g, x, y] = extendedGcd(35n, 15n);
-      expect(g).toBe(5n);
-      expect(35n * x + 15n * y).toBe(5n);
+      const [g, x, y] = extendedGcd(BigInt(35), BigInt(15));
+      expect(g).toBe(BigInt(5));
+      expect(BigInt(35) * x + BigInt(15) * y).toBe(BigInt(5));
       
       // Another example: gcd(101, 13) = 1 = 101*4 + 13*(-31)
-      const [g2, x2, y2] = extendedGcd(101n, 13n);
-      expect(g2).toBe(1n);
-      expect(101n * x2 + 13n * y2).toBe(1n);
+      const [g2, x2, y2] = extendedGcd(BigInt(101), BigInt(13));
+      expect(g2).toBe(BigInt(1));
+      expect(BigInt(101) * x2 + BigInt(13) * y2).toBe(BigInt(1));
     });
     
     test('works with one zero input', () => {
       // gcd(0, 5) = 5, with coefficients (0, 1)
-      const [g, x, y] = extendedGcd(0n, 5n);
-      expect(g).toBe(5n);
-      expect(x).toBe(0n);
-      expect(y).toBe(1n);
+      const [g, x, y] = extendedGcd(BigInt(0), BigInt(5));
+      expect(g).toBe(BigInt(5));
+      expect(x).toBe(BigInt(0));
+      expect(y).toBe(BigInt(1));
       
       // gcd(7, 0) = 7, with coefficients (1, 0)
-      const [g2, x2, y2] = extendedGcd(7n, 0n);
-      expect(g2).toBe(7n);
-      expect(x2).toBe(1n);
-      expect(y2).toBe(0n);
+      const [g2, x2, y2] = extendedGcd(BigInt(7), BigInt(0));
+      expect(g2).toBe(BigInt(7));
+      expect(x2).toBe(BigInt(1));
+      expect(y2).toBe(BigInt(0));
     });
   });
   
   describe('gcd function', () => {
     test('calculates correct greatest common divisor', () => {
-      expect(gcd(48n, 18n)).toBe(6n);
-      expect(gcd(101n, 13n)).toBe(1n);
-      expect(gcd(0n, 5n)).toBe(5n);
-      expect(gcd(5n, 0n)).toBe(5n);
+      expect(gcd(BigInt(48), BigInt(18))).toBe(BigInt(6));
+      expect(gcd(BigInt(101), BigInt(13))).toBe(BigInt(1));
+      expect(gcd(BigInt(0), BigInt(5))).toBe(BigInt(5));
+      expect(gcd(BigInt(5), BigInt(0))).toBe(BigInt(5));
     });
     
     test('handles negative numbers', () => {
-      expect(gcd(-48n, 18n)).toBe(6n);
-      expect(gcd(48n, -18n)).toBe(6n);
-      expect(gcd(-48n, -18n)).toBe(6n);
+      expect(gcd(-BigInt(48), BigInt(18))).toBe(BigInt(6));
+      expect(gcd(BigInt(48), -BigInt(18))).toBe(BigInt(6));
+      expect(gcd(-BigInt(48), -BigInt(18))).toBe(BigInt(6));
     });
   });
   
   describe('lcm function', () => {
     test('calculates correct least common multiple', () => {
-      expect(lcm(4n, 6n)).toBe(12n);
-      expect(lcm(15n, 20n)).toBe(60n);
-      expect(lcm(7n, 11n)).toBe(77n);
+      expect(lcm(BigInt(4), BigInt(6))).toBe(BigInt(12));
+      expect(lcm(BigInt(15), BigInt(20))).toBe(BigInt(60));
+      expect(lcm(BigInt(7), BigInt(11))).toBe(BigInt(77));
     });
     
     test('handles zero inputs', () => {
-      expect(lcm(0n, 5n)).toBe(0n);
-      expect(lcm(5n, 0n)).toBe(0n);
-      expect(lcm(0n, 0n)).toBe(0n);
+      expect(lcm(BigInt(0), BigInt(5))).toBe(BigInt(0));
+      expect(lcm(BigInt(5), BigInt(0))).toBe(BigInt(0));
+      expect(lcm(BigInt(0), BigInt(0))).toBe(BigInt(0));
     });
   });
   
@@ -287,10 +287,10 @@ describe('Model Interface', () => {
       });
       
       // JavaScript modulo behavior (not Python compatible)
-      expect(operations.mod(-5, 3)).toBe(-2n);
+      expect(operations.mod(-5, 3)).toBe(-BigInt(2));
       
       // Operation should still work correctly
-      expect(operations.modPow(2, 10, 1000)).toBe(24n);
+      expect(operations.modPow(2, 10, 1000)).toBe(BigInt(24));
     });
   });
   
@@ -306,9 +306,9 @@ describe('Model Interface', () => {
     test('functions return bigint values regardless of input types', () => {
       // Test mod function
       const modResult1: bigint = mod(10, 3);
-      const modResult2: bigint = mod(10n, 3n);
-      const modResult3: bigint = mod(10, 3n);
-      const modResult4: bigint = mod(10n, 3);
+      const modResult2: bigint = mod(BigInt(10), BigInt(3));
+      const modResult3: bigint = mod(10, BigInt(3));
+      const modResult4: bigint = mod(BigInt(10), 3);
       
       // Verify types at runtime
       expect(typeof modResult1).toBe('bigint');
@@ -318,7 +318,7 @@ describe('Model Interface', () => {
       
       // Test modPow function
       const powResult1: bigint = modPow(2, 10, 1000);
-      const powResult2: bigint = modPow(2n, 10n, 1000n);
+      const powResult2: bigint = modPow(BigInt(2), BigInt(10), BigInt(1000));
       
       // Verify types at runtime
       expect(typeof powResult1).toBe('bigint');
@@ -326,7 +326,7 @@ describe('Model Interface', () => {
       
       // Test modInverse function
       const invResult1: bigint = modInverse(3, 11);
-      const invResult2: bigint = modInverse(3n, 11n);
+      const invResult2: bigint = modInverse(BigInt(3), BigInt(11));
       
       // Verify types at runtime
       expect(typeof invResult1).toBe('bigint');
@@ -334,7 +334,7 @@ describe('Model Interface', () => {
       
       // Test modMul function
       const mulResult1: bigint = modMul(7, 8, 13);
-      const mulResult2: bigint = modMul(7n, 8n, 13n);
+      const mulResult2: bigint = modMul(BigInt(7), BigInt(8), BigInt(13));
       
       // Verify types at runtime
       expect(typeof mulResult1).toBe('bigint');
@@ -369,23 +369,23 @@ describe('Model Interface', () => {
       clearCache();
       
       // The operations should still work after clearing the cache
-      expect(modInverse(3, 11)).toBe(4n);
-      expect(modInverse(7, 20)).toBe(3n);
+      expect(modInverse(3, 11)).toBe(BigInt(4));
+      expect(modInverse(7, 20)).toBe(BigInt(3));
     });
     
     test('custom instance can clear its own cache', () => {
       const operations = createModularOperations({ useCache: true });
       
       // Use functions to populate cache
-      operations.gcd(48n, 18n);
+      operations.gcd(BigInt(48), BigInt(18));
       operations.modInverse(3, 11);
       
       // Clear the cache
       operations.clearCache();
       
       // Operations should still work
-      expect(operations.gcd(48n, 18n)).toBe(6n);
-      expect(operations.modInverse(3, 11)).toBe(4n);
+      expect(operations.gcd(BigInt(48), BigInt(18))).toBe(BigInt(6));
+      expect(operations.modInverse(3, 11)).toBe(BigInt(4));
     });
   });
   
@@ -394,10 +394,10 @@ describe('Model Interface', () => {
       const debugOps = createModularOperations({ debug: true });
       
       // Results should be the same as without debug mode
-      expect(debugOps.mod(10, 3)).toBe(1n);
-      expect(debugOps.modPow(2, 10, 1000)).toBe(24n);
-      expect(debugOps.modInverse(3, 11)).toBe(4n);
-      expect(debugOps.gcd(48n, 18n)).toBe(6n);
+      expect(debugOps.mod(10, 3)).toBe(BigInt(1));
+      expect(debugOps.modPow(2, 10, 1000)).toBe(BigInt(24));
+      expect(debugOps.modInverse(3, 11)).toBe(BigInt(4));
+      expect(debugOps.gcd(BigInt(48), BigInt(18))).toBe(BigInt(6));
     });
     
     test('strict mode validates operation sizes', () => {
@@ -407,8 +407,8 @@ describe('Model Interface', () => {
       });
       
       // Normal operations should work
-      expect(strictOps.mod(10, 3)).toBe(1n);
-      expect(strictOps.modPow(2, 10, 1000)).toBe(24n);
+      expect(strictOps.mod(10, 3)).toBe(BigInt(1));
+      expect(strictOps.modPow(2, 10, 1000)).toBe(BigInt(24));
       
       // We can't easily test the size limits without exceeding memory constraints
       // in the test environment, but we can confirm the function still works in strict mode

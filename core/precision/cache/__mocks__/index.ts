@@ -20,8 +20,8 @@ import {
   CacheModelInterface
 } from '../types';
 
-import { ModelResult, ModelLifecycleState } from '../../../../os/model/types';
-import { createLoggingMock, createLogging } from './os-logging-mock';
+import { ModelResult, ModelLifecycleState } from './os-model-mock';
+import { createLogging } from './os-logging-mock';
 
 // Default cache metrics
 const DEFAULT_METRICS: CacheMetrics = {
@@ -371,6 +371,45 @@ export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(
 ): T {
   // Simple mock implementation that just returns the original function
   return fn;
+}
+
+/**
+ * Mock global cache management functions
+ */
+export function clearAllCaches(): void {
+  // Mock implementation - no-op
+}
+
+export function clearFunctionCache(name: string): void {
+  // Mock implementation - no-op
+}
+
+export async function terminateAllCaches(): Promise<void> {
+  // Mock implementation - no-op
+}
+
+/**
+ * Mock modular cache functions
+ */
+export function createModularCache<K = any, V = any>(
+  name: string,
+  options: any = {}
+): CacheModelInterface<K, V> {
+  return createMockCache(options) as CacheModelInterface<K, V>;
+}
+
+export function createKeyGenerator(maxKeyLength: number = 100) {
+  return (a: any, b: any, ...rest: any[]): string => {
+    return `${a},${b}${rest.length > 0 ? ',' + rest.join(',') : ''}`;
+  };
+}
+
+export function memoizeModular<T extends (...args: any[]) => any>(
+  fn: T,
+  name: string,
+  options: any = {}
+): T {
+  return fn; // Just return the original function for mocking
 }
 
 // Export constants

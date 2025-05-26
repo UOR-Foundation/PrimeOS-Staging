@@ -12,8 +12,8 @@ import {
   memoizeAsync
 } from './index';
 
-import { BaseModel, ModelResult } from './__mocks__/os-model-mock';
-import { createLogging } from './__mocks__/os-logging-mock';
+import { BaseModel, ModelResult } from '../__mocks__/os-model-mock';
+import { createLogging } from '../__mocks__/os-logging-mock';
 
 // Create a mock logger with the same API as the real one
 const LoggingMock = {

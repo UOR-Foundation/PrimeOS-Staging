@@ -23,6 +23,9 @@ import {
   CacheEntryMetadata
 } from './types';
 
+// Export global cache management
+export { clearAllCaches, registerCache, unregisterCache } from "./global-cache-manager";
+
 import { createLRUStrategy } from './strategies/lru-strategy';
 import { createLFUStrategy } from './strategies/lfu-strategy';
 import { createTimeStrategy } from './strategies/time-strategy';

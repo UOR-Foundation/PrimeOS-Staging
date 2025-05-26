@@ -66,8 +66,8 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
     metrics
   };
   
-  // Return mock implementation
-  return {
+  // Create the cache implementation
+  const cacheImpl: CacheModelInterface = {
     // Cache interface methods
     get(key: any) {
       metrics.hitCount += store.has(key) ? 1 : 0;
@@ -164,34 +164,44 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
         
         switch (cacheInput.operation) {
           case 'get':
-            result = this.get(cacheInput.key);
+            result = cacheImpl.get(cacheInput.key);
             break;
           case 'set':
-            result = this.set(cacheInput.key, cacheInput.value, cacheInput.options);
+            result = cacheImpl.set(cacheInput.key, cacheInput.value, cacheInput.options);
             break;
           case 'has':
-            result = this.has(cacheInput.key);
+            result = cacheImpl.has(cacheInput.key);
             break;
           case 'delete':
-            result = this.delete(cacheInput.key);
+            result = cacheImpl.delete(cacheInput.key);
             break;
           case 'clear':
-            this.clear();
+            cacheImpl.clear();
             result = true;
             break;
           case 'getMetrics':
-            result = this.getMetrics();
+            // Safe call with null check
+            result = cacheImpl.getMetrics ? cacheImpl.getMetrics() : DEFAULT_METRICS;
             break;
           case 'optimize':
-            this.optimize();
+            // Safe call with null check
+            if (cacheImpl.optimize) {
+              cacheImpl.optimize();
+            }
             result = true;
             break;
           case 'setMaxSize':
-            this.setMaxSize(cacheInput.param!);
+            // Safe call with null checks
+            if (cacheImpl.setMaxSize && cacheInput.param !== undefined) {
+              cacheImpl.setMaxSize(cacheInput.param);
+            }
             result = true;
             break;
           case 'setMaxAge':
-            this.setMaxAge(cacheInput.param!);
+            // Safe call with null checks
+            if (cacheImpl.setMaxAge && cacheInput.param !== undefined) {
+              cacheImpl.setMaxAge(cacheInput.param);
+            }
             result = true;
             break;
           default:
@@ -212,7 +222,7 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
     },
     
     async reset() {
-      this.clear();
+      cacheImpl.clear();
       
       // Reset metrics
       Object.assign(metrics, {
@@ -256,4 +266,6 @@ export function createMockCache(options: CacheOptions = {}): CacheModelInterface
       };
     }
   };
+  
+  return cacheImpl;
 }

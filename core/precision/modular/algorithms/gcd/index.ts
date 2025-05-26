@@ -72,8 +72,8 @@ export function gcd(
   }
   
   // Handle negative inputs
-  a = a < 0n ? -a : a;
-  b = b < 0n ? -b : b;
+  a = a < BigInt(0) ? -a : a;
+  b = b < BigInt(0) ? -b : b;
   
   // Check operation size in strict mode
   if (opts.strict) {
@@ -94,7 +94,7 @@ export function gcd(
   }
   
   // Base case
-  if (b === 0n) {
+  if (b === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`gcd result: ${a} (base case)`).catch(() => {});
     }
@@ -127,8 +127,8 @@ export function extendedGcd(
   
   // Check operation size in strict mode
   if (opts.strict) {
-    const aBits = bitLength(a < 0n ? -a : a);
-    const bBits = bitLength(b < 0n ? -b : b);
+    const aBits = bitLength(a < BigInt(0) ? -a : a);
+    const bBits = bitLength(b < BigInt(0) ? -b : b);
     
     if (Math.max(aBits, bBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
       const error = createBitSizeError(
@@ -143,11 +143,11 @@ export function extendedGcd(
     }
   }
   
-  if (b === 0n) {
+  if (b === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`extendedGcd base case: [${a}, 1, 0]`).catch(() => {});
     }
-    return [a, 1n, 0n];
+    return [a, BigInt(1), BigInt(0)];
   }
   
   // Recursive case
@@ -182,16 +182,16 @@ export function lcm(
     opts.logger.debug(`lcm(${a}, ${b})`).catch(() => {});
   }
   
-  if (a === 0n || b === 0n) {
+  if (a === BigInt(0) || b === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`lcm result: 0 (special case with zero input)`).catch(() => {});
     }
-    return 0n;
+    return BigInt(0);
   }
   
   // Take absolute values
-  a = a < 0n ? -a : a;
-  b = b < 0n ? -b : b;
+  a = a < BigInt(0) ? -a : a;
+  b = b < BigInt(0) ? -b : b;
   
   // Check operation size in strict mode
   if (opts.strict) {
@@ -257,37 +257,37 @@ export function binaryGcd(
   }
   
   // Handle negative inputs
-  a = a < 0n ? -a : a;
-  b = b < 0n ? -b : b;
+  a = a < BigInt(0) ? -a : a;
+  b = b < BigInt(0) ? -b : b;
   
   // Base cases
-  if (a === 0n) return b;
-  if (b === 0n) return a;
+  if (a === BigInt(0)) return b;
+  if (b === BigInt(0)) return a;
   if (a === b) return a;
-  if (a === 1n || b === 1n) return 1n;
+  if (a === BigInt(1) || b === BigInt(1)) return BigInt(1);
   
   // Check if both a and b are even
-  if ((a & 1n) === 0n && (b & 1n) === 0n) {
-    return binaryGcd(a >> 1n, b >> 1n, opts) << 1n;
+  if ((a & BigInt(1)) === BigInt(0) && (b & BigInt(1)) === BigInt(0)) {
+    return binaryGcd(a >> BigInt(1), b >> BigInt(1), opts) << BigInt(1);
   }
   
   // Check if a is even and b is odd
-  if ((a & 1n) === 0n) {
-    return binaryGcd(a >> 1n, b, opts);
+  if ((a & BigInt(1)) === BigInt(0)) {
+    return binaryGcd(a >> BigInt(1), b, opts);
   }
   
   // Check if a is odd and b is even
-  if ((b & 1n) === 0n) {
-    return binaryGcd(a, b >> 1n, opts);
+  if ((b & BigInt(1)) === BigInt(0)) {
+    return binaryGcd(a, b >> BigInt(1), opts);
   }
   
   // Both a and b are odd
   // Subtract the smaller from the larger
   if (a > b) {
-    return binaryGcd((a - b) >> 1n, b, opts);
+    return binaryGcd((a - b) >> BigInt(1), b, opts);
   }
   
-  return binaryGcd((b - a) >> 1n, a, opts);
+  return binaryGcd((b - a) >> BigInt(1), a, opts);
 }
 
 /**

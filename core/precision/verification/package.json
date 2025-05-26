@@ -2,7 +2,7 @@
   "name": "@primeos/core-precision-verification",
   "version": "1.0.0",
   "description": "Data integrity verification module for PrimeOS",
-  "main": "index.js",
+  "main": "index.ts",
   "types": "index.d.ts",
   "scripts": {
     "build": "tsc",

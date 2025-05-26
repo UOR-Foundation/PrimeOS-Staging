@@ -6,44 +6,43 @@
  */
 
 import {
-  createMockMathUtils,
-  createMockMathUtilsModel,
-  mockMathUtils,
-  mockMathUtilsModel,
-  loggingMock,
-  modelMock
+  createMathUtils,
+  MathUtils,
+  BaseModel,
+  ModelLifecycleState,
+  createLogging
 } from './index';
 
 describe('Utility Mocks', () => {
   describe('MathUtils Mock', () => {
     test('creates a mock with all required methods', () => {
-      const mock = createMockMathUtils();
+      const mock = createMathUtils();
       
-      expect(mock).toHaveProperty('bitLength');
-      expect(mock).toHaveProperty('exactlyEquals');
-      expect(mock).toHaveProperty('toByteArray');
-      expect(mock).toHaveProperty('fromByteArray');
-      expect(mock).toHaveProperty('isSafeInteger');
-      expect(mock).toHaveProperty('sign');
-      expect(mock).toHaveProperty('abs');
-      expect(mock).toHaveProperty('isPowerOfTwo');
+      expect(typeof mock.bitLength).toBe('function');
+      expect(typeof mock.exactlyEquals).toBe('function');
+      expect(typeof mock.toByteArray).toBe('function');
+      expect(typeof mock.fromByteArray).toBe('function');
+      expect(typeof mock.isSafeInteger).toBe('function');
+      expect(typeof mock.sign).toBe('function');
+      expect(typeof mock.abs).toBe('function');
+      expect(typeof mock.isPowerOfTwo).toBe('function');
     });
     
     test('provides default mock functionality', () => {
-      const mock = createMockMathUtils();
+      const mock = createMathUtils();
       
-      expect(mock.bitLength(8n)).toBe(4);
+      expect(mock.bitLength(BigInt(8))).toBe(4);
       expect(mock.exactlyEquals(1, 1)).toBe(true);
       expect(mock.exactlyEquals(1, 2)).toBe(false);
       expect(mock.isSafeInteger(123)).toBe(true);
       expect(mock.sign(-5)).toBe(-1);
-      expect(mock.abs(-10n)).toBe(10n);
+      expect(mock.abs(-BigInt(10))).toBe(BigInt(10));
       expect(mock.isPowerOfTwo(8)).toBe(true);
       expect(mock.isPowerOfTwo(7)).toBe(false);
       
       // Verify byte array methods return expected types
-      const bytes = mock.toByteArray(123n);
-      expect(bytes).toBeInstanceOf(Uint8Array);
+      const bytes = mock.toByteArray(BigInt(123));
+      expect(bytes instanceof Uint8Array).toBe(true);
       
       const value = mock.fromByteArray(bytes);
       expect(typeof value).toBe('bigint');
@@ -52,65 +51,67 @@ describe('Utility Mocks', () => {
   
   describe('MathUtils Model Mock', () => {
     test('creates a mock that implements both MathUtils and ModelInterface', () => {
-      const mock = createMockMathUtilsModel();
+      const mock = createMathUtils();
       
       // Check MathUtils methods
-      expect(mock).toHaveProperty('bitLength');
-      expect(mock).toHaveProperty('exactlyEquals');
-      expect(mock).toHaveProperty('toByteArray');
-      expect(mock).toHaveProperty('fromByteArray');
-      expect(mock).toHaveProperty('isSafeInteger');
-      expect(mock).toHaveProperty('sign');
-      expect(mock).toHaveProperty('abs');
-      expect(mock).toHaveProperty('isPowerOfTwo');
+      expect(typeof mock.bitLength).toBe('function');
+      expect(typeof mock.exactlyEquals).toBe('function');
+      expect(typeof mock.toByteArray).toBe('function');
+      expect(typeof mock.fromByteArray).toBe('function');
+      expect(typeof mock.isSafeInteger).toBe('function');
+      expect(typeof mock.sign).toBe('function');
+      expect(typeof mock.abs).toBe('function');
+      expect(typeof mock.isPowerOfTwo).toBe('function');
       
       // Check ModelInterface methods
-      expect(mock).toHaveProperty('initialize');
-      expect(mock).toHaveProperty('process');
-      expect(mock).toHaveProperty('getState');
-      expect(mock).toHaveProperty('reset');
-      expect(mock).toHaveProperty('terminate');
-      expect(mock).toHaveProperty('createResult');
+      expect(typeof mock.initialize).toBe('function');
+      expect(typeof mock.process).toBe('function');
+      expect(typeof mock.getState).toBe('function');
+      expect(typeof mock.reset).toBe('function');
+      expect(typeof mock.terminate).toBe('function');
+      expect(typeof mock.createResult).toBe('function');
     });
     
     test('getState returns MathUtilsModelState', () => {
-      const mock = createMockMathUtilsModel();
+      const mock = createMathUtils({ name: 'test-utils', version: '1.0.0' });
       const state = mock.getState();
       
-      expect(state).toHaveProperty('lifecycle');
-      expect(state).toHaveProperty('lastStateChangeTime');
-      expect(state).toHaveProperty('uptime');
-      expect(state).toHaveProperty('operationCount');
-      expect(state).toHaveProperty('config');
-      expect(state).toHaveProperty('cache');
+      expect(state.lifecycle).toBeDefined();
+      expect(state.lastStateChangeTime).toBeDefined();
+      expect(state.uptime).toBeDefined();
+      expect(state.operationCount).toBeDefined();
+      expect(state.config).toBeDefined();
+      expect(state.cache).toBeDefined();
       
-      expect(state.config).toHaveProperty('enableCache');
-      expect(state.config).toHaveProperty('useOptimized');
-      expect(state.config).toHaveProperty('strict');
-      expect(state.config).toHaveProperty('name');
-      expect(state.config).toHaveProperty('version');
+      expect(state.config.enableCache).toBeDefined();
+      expect(state.config.useOptimized).toBeDefined();
+      expect(state.config.strict).toBeDefined();
+      expect(state.config.name).toBe('test-utils');
+      expect(state.config.version).toBe('1.0.0');
       
-      expect(state.cache).toHaveProperty('bitLengthCacheSize');
-      expect(state.cache).toHaveProperty('bitLengthCacheHits');
-      expect(state.cache).toHaveProperty('bitLengthCacheMisses');
+      if (state.cache) {
+        expect(state.cache.bitLengthCacheSize).toBeDefined();
+        expect(state.cache.bitLengthCacheHits).toBeDefined();
+        expect(state.cache.bitLengthCacheMisses).toBeDefined();
+      }
     });
     
     test('process method handles operations', async () => {
-      const mock = createMockMathUtilsModel();
+      const mock = createMathUtils();
       
       const result = await mock.process({
         operation: 'bitLength',
-        params: [123n]
+        params: [BigInt(123)]
       });
       
-      expect(result).toHaveProperty('success', true);
-      expect(result).toHaveProperty('data');
-      expect(result).toHaveProperty('timestamp');
-      expect(result).toHaveProperty('source');
+      expect(result.success).toBe(true);
+      expect(result.data).toBeDefined();
+      expect(result.timestamp).toBeDefined();
+      expect(result.source).toBeDefined();
     });
     
     test('lifecycle methods return expected results', async () => {
-      const mock = createMockMathUtilsModel();
+      const mock = createMathUtils();
       
       const initResult = await mock.initialize();
       expect(initResult.success).toBe(true);
@@ -125,10 +126,12 @@ describe('Utility Mocks', () => {
   
   describe('Exported Instances', () => {
     test('exports pre-created instances', () => {
-      expect(mockMathUtils).toBeDefined();
-      expect(mockMathUtilsModel).toBeDefined();
-      expect(loggingMock).toBeDefined();
-      expect(modelMock).toBeDefined();
+      expect(MathUtils).toBeDefined();
+      expect(BaseModel).toBeDefined();
+      expect(ModelLifecycleState).toBeDefined();
+      
+      const logging = createLogging();
+      expect(logging).toBeDefined();
     });
   });
 });

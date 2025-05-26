@@ -27,21 +27,21 @@ export function createDivisionFunctions(options: UtilityOptions = {}) {
     const bBig = typeof b === 'number' ? BigInt(Math.floor(b)) : b;
     
     // Handle division by zero
-    if (bBig === 0n) {
+    if (bBig === BigInt(0)) {
       throw createDivisionByZeroError();
     }
     
     // Handle negative numbers
-    if (bBig < 0n) {
+    if (bBig < BigInt(0)) {
       return ceilDiv(-aBig, -bBig);
     }
     
     // Ceiling division formula: (a + b - 1) / b for positive b
     // For negative a, we need to handle differently
-    if (aBig < 0n) {
+    if (aBig < BigInt(0)) {
       return aBig / bBig;
     } else {
-      return (aBig + bBig - 1n) / bBig;
+      return (aBig + bBig - BigInt(1)) / bBig;
     }
   };
   
@@ -55,19 +55,19 @@ export function createDivisionFunctions(options: UtilityOptions = {}) {
     const bBig = typeof b === 'number' ? BigInt(Math.floor(b)) : b;
     
     // Handle division by zero
-    if (bBig === 0n) {
+    if (bBig === BigInt(0)) {
       throw createDivisionByZeroError();
     }
     
     // Handle negative numbers
-    if (bBig < 0n) {
+    if (bBig < BigInt(0)) {
       return floorDiv(-aBig, -bBig);
     }
     
     // Floor division is just integer division for BigInt
     // For negative a, we need to handle differently
-    if (aBig < 0n) {
-      return (aBig - bBig + 1n) / bBig;
+    if (aBig < BigInt(0)) {
+      return (aBig - bBig + BigInt(1)) / bBig;
     } else {
       return aBig / bBig;
     }

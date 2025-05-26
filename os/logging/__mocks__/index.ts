@@ -84,25 +84,25 @@ export function createLogging(options: LoggingOptions = {}): LoggingInterface {
     return entry;
   };
   
-  // Return a mock implementation with all required methods
-  return {
+  // Create Jest spy functions for all logging methods
+  const mockLogger = {
     // Basic logging methods
-    initialize: async () => {
+    initialize: jest.fn().mockImplementation(async () => {
       state.lifecycle = ModelLifecycleState.Ready;
       state.lastStateChangeTime = Date.now();
       return createStandardResult(true);
-    },
+    }),
     
-    terminate: async () => {
+    terminate: jest.fn().mockImplementation(async () => {
       state.lifecycle = ModelLifecycleState.Terminated;
       state.lastStateChangeTime = Date.now();
       return createStandardResult(true);
-    },
+    }),
     
-    getState: () => ({ ...state }),
+    getState: jest.fn().mockImplementation(() => ({ ...state })),
     
     // Enhanced with ModelInterface methods
-    reset: async () => {
+    reset: jest.fn().mockImplementation(async () => {
       entries.length = 0;
       state.operationCount = {
         total: 0,
@@ -118,9 +118,9 @@ export function createLogging(options: LoggingOptions = {}): LoggingInterface {
       state.recentEntries = [];
       state.lastStateChangeTime = Date.now();
       return createStandardResult(true);
-    },
+    }),
     
-    process: async <T, R>(input: T): Promise<ModelResult<R>> => {
+    process: jest.fn().mockImplementation(async <T, R>(input: T): Promise<ModelResult<R>> => {
       try {
         if (typeof input === 'object' && input !== null) {
           const request = input as any;
@@ -135,57 +135,59 @@ export function createLogging(options: LoggingOptions = {}): LoggingInterface {
         state.operationCount.failed++;
         return createStandardResult(false, undefined as unknown as R, error.message);
       }
-    },
+    }),
     
-    createResult: <T>(success: boolean, data?: T, error?: string): ModelResult<T> => 
-      createStandardResult(success, data, error),
+    createResult: jest.fn().mockImplementation(<T>(success: boolean, data?: T, error?: string): ModelResult<T> => 
+      createStandardResult(success, data, error)),
     
-    // Logging specific methods
-    log: async (level: LogLevel, message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    // Logging specific methods - all as Jest spies
+    log: jest.fn().mockImplementation(async (level: LogLevel, message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(level, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    trace: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    trace: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.TRACE, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    debug: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    debug: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.DEBUG, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    info: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    info: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.INFO, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    warn: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    warn: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.WARN, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    error: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    error: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.ERROR, message, data);
       return createStandardResult(true);
-    },
+    }),
     
-    fatal: async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
+    fatal: jest.fn().mockImplementation(async (message: string, data?: unknown): Promise<ModelResult<unknown>> => {
       addEntry(LogLevel.FATAL, message, data);
       return createStandardResult(true);
-    },
+    }),
     
     // Additional required methods
-    getEntries: (count?: number): LogEntry[] => {
+    getEntries: jest.fn().mockImplementation((count?: number): LogEntry[] => {
       const limit = count || entries.length;
       return entries.slice(0, limit);
-    },
+    }),
     
-    clearHistory: async (): Promise<ModelResult<unknown>> => {
+    clearHistory: jest.fn().mockImplementation(async (): Promise<ModelResult<unknown>> => {
       entries.length = 0;
       state.recentEntries = [];
       return createStandardResult(true);
-    }
+    })
   };
+  
+  return mockLogger;
 }

@@ -5,25 +5,12 @@
  * Test suite for the verification cache module.
  */
 
-import { 
-  createCacheFactory, 
-  createDefaultCache, 
-  CacheEvictionPolicy,
-  VerificationCacheAdvanced,
-  VerificationCacheFactoryAdvanced
-} from './index';
-
-import { LoggingInterface } from '../../../../os/logging';
-import { ModelResult } from '../../../../os/model';
-
-// Mock the os/model and os/logging modules
+// Mock the os/model and os/logging modules FIRST
 jest.mock('../../../../os/model', () => require('../__mocks__/os-model-mock'));
 jest.mock('../../../../os/logging', () => require('../__mocks__/os-logging-mock'));
 
-// Mock the precision/cache module
+// Mock the precision/cache module BEFORE any imports that use it
 jest.mock('../../cache', () => {
-  const originalModule = jest.requireActual('../../cache');
-  
   // Create a mock cache implementation
   const mockCache = {
     get: jest.fn(),
@@ -66,7 +53,6 @@ jest.mock('../../cache', () => {
   };
   
   return {
-    ...originalModule,
     createCache: jest.fn().mockReturnValue(mockCache),
     createLRUCache: jest.fn().mockReturnValue(mockCache),
     createLFUCache: jest.fn().mockReturnValue(mockCache),
@@ -76,6 +62,17 @@ jest.mock('../../cache', () => {
     memoizeAsync: jest.fn().mockImplementation((fn) => fn)
   };
 });
+
+import { 
+  createCacheFactory, 
+  createDefaultCache, 
+  CacheEvictionPolicy,
+  VerificationCacheAdvanced,
+  VerificationCacheFactoryAdvanced
+} from './index';
+
+import { LoggingInterface } from '../../../../os/logging';
+import { ModelResult } from '../../../../os/model';
 
 describe('Verification Cache Module', () => {
   describe('Basic functionality', () => {

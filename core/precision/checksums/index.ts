@@ -287,18 +287,18 @@ export class ChecksumsImpl extends BaseModel implements ChecksumsModelInterface 
         // For test environments or when a proper registry isn't available
 
         // For small primes, use a simple algorithm that approximates prime indices
-        if (prime < 100n) {
+        if (prime < BigInt(100)) {
           // For small primes, derive a pseudo-index that's deterministic
           // This is faster than full factorization and works for common small primes
           primeIndex = Number(prime);
           
           // Adjust index to approximate actual prime index
           // This helps maintain XOR patterns similar to registry indices
-          if (prime > 2n) primeIndex -= 1;      // Adjust for primes > 2
-          if (prime > 3n) primeIndex -= 1;      // Adjust for primes > 3
-          if (prime > 5n) primeIndex -= 1;      // Adjust for primes > 5
-          if (prime > 10n) primeIndex -= 2;     // Adjust for primes > 10
-          if (prime > 30n) primeIndex -= 5;     // Further adjust for larger primes
+          if (prime > BigInt(2)) primeIndex -= 1;      // Adjust for primes > 2
+          if (prime > BigInt(3)) primeIndex -= 1;      // Adjust for primes > 3
+          if (prime > BigInt(5)) primeIndex -= 1;      // Adjust for primes > 5
+          if (prime > BigInt(10)) primeIndex -= 2;     // Adjust for primes > 10
+          if (prime > BigInt(30)) primeIndex -= 5;     // Further adjust for larger primes
           
           // Final mapping to index space (approximation)
           primeIndex = Math.max(0, Math.floor(primeIndex / 2));
@@ -438,7 +438,11 @@ export class ChecksumsImpl extends BaseModel implements ChecksumsModelInterface 
     
     // Simple approach: directly multiply by the prime raised to the power
     // This ensures the checksum factor will have exactly the required exponent
-    const checksum = checksumPrime ** BigInt(checksumPower);
+    // Compute checksumPrime^checksumPower via loop for compatibility
+    let checksum: bigint = BigInt(1);
+    for (let i = 0; i < checksumPower; i++) {
+      checksum *= checksumPrime;
+    }
     
     // Multiply raw value by checksum
     const result = raw * checksum;

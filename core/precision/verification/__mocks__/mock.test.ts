@@ -32,17 +32,17 @@ describe('Verification Mocks', () => {
     expect(typeof mockPrimeRegistry.factor).toBe('function');
     
     // Test basic functionality
-    expect(mockPrimeRegistry.getPrime(0)).toBe(3n);
-    expect(mockPrimeRegistry.getPrime(1)).toBe(5n);
-    expect(mockPrimeRegistry.getIndex(3n)).toBe(0);
-    expect(mockPrimeRegistry.getIndex(5n)).toBe(1);
+    expect(mockPrimeRegistry.getPrime(0)).toBe(BigInt(3));
+    expect(mockPrimeRegistry.getPrime(1)).toBe(BigInt(5));
+    expect(mockPrimeRegistry.getIndex(BigInt(3))).toBe(0);
+    expect(mockPrimeRegistry.getIndex(BigInt(5))).toBe(1);
     
     // Test factorization
-    const factors42 = mockPrimeRegistry.factor(42n);
+    const factors42 = mockPrimeRegistry.factor(BigInt(42));
     expect(factors42).toHaveLength(3);
-    expect(factors42[0].prime).toBe(2n);
-    expect(factors42[1].prime).toBe(3n);
-    expect(factors42[2].prime).toBe(7n);
+    expect(factors42[0].prime).toBe(BigInt(2));
+    expect(factors42[1].prime).toBe(BigInt(3));
+    expect(factors42[2].prime).toBe(BigInt(7));
   });
   
   it('provides mock checksums for verification', () => {
@@ -51,17 +51,17 @@ describe('Verification Mocks', () => {
     expect(typeof mockChecksums.calculateChecksum).toBe('function');
     
     // Test extractFactorsAndChecksum
-    const result42 = mockChecksums.extractFactorsAndChecksum(42n);
+    const result42 = mockChecksums.extractFactorsAndChecksum(BigInt(42));
     expect(result42.coreFactors).toHaveLength(3);
-    expect(result42.checksumPrime).toBe(11n);
+    expect(result42.checksumPrime).toBe(BigInt(11));
     
     // Test calculateChecksum
     const checksum = mockChecksums.calculateChecksum([
-      { prime: 2n, exponent: 1 },
-      { prime: 3n, exponent: 1 },
-      { prime: 7n, exponent: 1 }
+      { prime: BigInt(2), exponent: 1 },
+      { prime: BigInt(3), exponent: 1 },
+      { prime: BigInt(7), exponent: 1 }
     ]);
-    expect(checksum).toBe(11n);
+    expect(checksum).toBe(BigInt(11));
   });
   
   it('provides a mock cache implementation', () => {

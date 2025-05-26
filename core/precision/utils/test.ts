@@ -40,54 +40,54 @@ describe('Utility Functions', () => {
   // New tests for GCD and LCM
   describe('gcd', () => {
     test('calculates greatest common divisor correctly', () => {
-      expect(gcd(48, 18)).toBe(6n);
-      expect(gcd(48n, 18n)).toBe(6n);
-      expect(gcd(101, 13)).toBe(1n);
-      expect(gcd(0, 5)).toBe(5n);
-      expect(gcd(5, 0)).toBe(5n);
+      expect(gcd(48, 18)).toBe(BigInt(6));
+      expect(gcd(BigInt(48), BigInt(18))).toBe(BigInt(6));
+      expect(gcd(101, 13)).toBe(BigInt(1));
+      expect(gcd(0, 5)).toBe(BigInt(5));
+      expect(gcd(5, 0)).toBe(BigInt(5));
     });
     
     test('handles negative numbers', () => {
-      expect(gcd(-48, 18)).toBe(6n);
-      expect(gcd(48, -18)).toBe(6n);
-      expect(gcd(-48, -18)).toBe(6n);
+      expect(gcd(-48, 18)).toBe(BigInt(6));
+      expect(gcd(48, -18)).toBe(BigInt(6));
+      expect(gcd(-48, -18)).toBe(BigInt(6));
     });
     
     test('handles deep recursion correctly', () => {
       // Test with Fibonacci numbers which require deep recursion
-      expect(gcd(610, 987)).toBe(1n);
-      expect(gcd(610n, 987n)).toBe(1n);
+      expect(gcd(610, 987)).toBe(BigInt(1));
+      expect(gcd(BigInt(610), BigInt(987))).toBe(BigInt(1));
       
       // Test with large numbers
-      expect(gcd(123456789, 987654321)).toBe(9n);
-      expect(gcd(123456789n, 987654321n)).toBe(9n);
+      expect(gcd(123456789, 987654321)).toBe(BigInt(9));
+      expect(gcd(BigInt(123456789), BigInt(987654321))).toBe(BigInt(9));
       
       // Test with mixed number and BigInt
-      expect(gcd(123456789, 987654321n)).toBe(9n);
-      expect(gcd(123456789n, 987654321)).toBe(9n);
+      expect(gcd(123456789, BigInt(987654321))).toBe(BigInt(9));
+      expect(gcd(BigInt(123456789), 987654321)).toBe(BigInt(9));
     });
     
     test('handles stack overflow prevention', () => {
       // These numbers would cause a stack overflow with naive recursion
-      const a = 2n ** 100n - 1n;
-      const b = 2n ** 99n - 1n;
+      const a = BigInt(2) ** BigInt(100) - BigInt(1);
+      const b = BigInt(2) ** BigInt(99) - BigInt(1);
       expect(() => gcd(a, b)).not.toThrow();
-      expect(gcd(a, b)).toBe(1n);
+      expect(gcd(a, b)).toBe(BigInt(1));
     });
   });
   
   describe('lcm', () => {
     test('calculates least common multiple correctly', () => {
-      expect(lcm(4, 6)).toBe(12n);
-      expect(lcm(4n, 6n)).toBe(12n);
-      expect(lcm(15, 20)).toBe(60n);
-      expect(lcm(7, 11)).toBe(77n);
+      expect(lcm(4, 6)).toBe(BigInt(12));
+      expect(lcm(BigInt(4), BigInt(6))).toBe(BigInt(12));
+      expect(lcm(15, 20)).toBe(BigInt(60));
+      expect(lcm(7, 11)).toBe(BigInt(77));
     });
     
     test('handles zero inputs', () => {
-      expect(lcm(0, 5)).toBe(0n);
-      expect(lcm(5, 0)).toBe(0n);
-      expect(lcm(0, 0)).toBe(0n);
+      expect(lcm(0, 5)).toBe(BigInt(0));
+      expect(lcm(5, 0)).toBe(BigInt(0));
+      expect(lcm(0, 0)).toBe(BigInt(0));
     });
   });
   
@@ -95,76 +95,76 @@ describe('Utility Functions', () => {
     test('calculates correct Bézout coefficients', () => {
       // gcd(35, 15) = 5 = 35*(-1) + 15*3
       const [g, x, y] = extendedGcd(35, 15);
-      expect(g).toBe(5n);
-      expect(35n * x + 15n * y).toBe(5n);
+      expect(g).toBe(BigInt(5));
+      expect(BigInt(35) * x + BigInt(15) * y).toBe(BigInt(5));
       
       // Another example: gcd(101, 13) = 1 = 101*4 + 13*(-31)
       const [g2, x2, y2] = extendedGcd(101, 13);
-      expect(g2).toBe(1n);
-      expect(101n * x2 + 13n * y2).toBe(1n);
+      expect(g2).toBe(BigInt(1));
+      expect(BigInt(101) * x2 + BigInt(13) * y2).toBe(BigInt(1));
     });
     
     test('works with one zero input', () => {
       // gcd(0, 5) = 5, with coefficients (0, 1)
       const [g, x, y] = extendedGcd(0, 5);
-      expect(g).toBe(5n);
-      expect(x).toBe(0n);
-      expect(y).toBe(1n);
+      expect(g).toBe(BigInt(5));
+      expect(x).toBe(BigInt(0));
+      expect(y).toBe(BigInt(1));
       
       // gcd(7, 0) = 7, with coefficients (1, 0)
       const [g2, x2, y2] = extendedGcd(7, 0);
-      expect(g2).toBe(7n);
-      expect(x2).toBe(1n);
-      expect(y2).toBe(0n);
+      expect(g2).toBe(BigInt(7));
+      expect(x2).toBe(BigInt(1));
+      expect(y2).toBe(BigInt(0));
     });
   });
   
   describe('integerSqrt', () => {
     test('calculates integer square root correctly', () => {
-      expect(integerSqrt(0)).toBe(0n);
-      expect(integerSqrt(1)).toBe(1n);
-      expect(integerSqrt(4)).toBe(2n);
-      expect(integerSqrt(9)).toBe(3n);
-      expect(integerSqrt(16)).toBe(4n);
-      expect(integerSqrt(25)).toBe(5n);
+      expect(integerSqrt(0)).toBe(BigInt(0));
+      expect(integerSqrt(1)).toBe(BigInt(1));
+      expect(integerSqrt(4)).toBe(BigInt(2));
+      expect(integerSqrt(9)).toBe(BigInt(3));
+      expect(integerSqrt(16)).toBe(BigInt(4));
+      expect(integerSqrt(25)).toBe(BigInt(5));
     });
     
     test('rounds down for non-perfect squares', () => {
-      expect(integerSqrt(2)).toBe(1n);
-      expect(integerSqrt(3)).toBe(1n);
-      expect(integerSqrt(5)).toBe(2n);
-      expect(integerSqrt(8)).toBe(2n);
-      expect(integerSqrt(10)).toBe(3n);
-      expect(integerSqrt(99)).toBe(9n);
+      expect(integerSqrt(2)).toBe(BigInt(1));
+      expect(integerSqrt(3)).toBe(BigInt(1));
+      expect(integerSqrt(5)).toBe(BigInt(2));
+      expect(integerSqrt(8)).toBe(BigInt(2));
+      expect(integerSqrt(10)).toBe(BigInt(3));
+      expect(integerSqrt(99)).toBe(BigInt(9));
     });
     
     test('works with large numbers', () => {
-      expect(integerSqrt(10000n)).toBe(100n);
-      expect(integerSqrt(1000000n)).toBe(1000n);
-      expect(integerSqrt(10000000000n)).toBe(100000n);
+      expect(integerSqrt(BigInt(10000))).toBe(BigInt(100));
+      expect(integerSqrt(BigInt(1000000))).toBe(BigInt(1000));
+      expect(integerSqrt(BigInt(10000000000))).toBe(BigInt(100000));
     });
   });
   
   describe('ceilDiv and floorDiv', () => {
     test('ceilDiv rounds up division results', () => {
-      expect(ceilDiv(10, 3)).toBe(4n);
-      expect(ceilDiv(9, 3)).toBe(3n);
-      expect(ceilDiv(11, 3)).toBe(4n);
-      expect(ceilDiv(0, 5)).toBe(0n);
+      expect(ceilDiv(10, 3)).toBe(BigInt(4));
+      expect(ceilDiv(9, 3)).toBe(BigInt(3));
+      expect(ceilDiv(11, 3)).toBe(BigInt(4));
+      expect(ceilDiv(0, 5)).toBe(BigInt(0));
     });
     
     test('floorDiv rounds down division results', () => {
-      expect(floorDiv(10, 3)).toBe(3n);
-      expect(floorDiv(9, 3)).toBe(3n);
-      expect(floorDiv(11, 3)).toBe(3n);
-      expect(floorDiv(0, 5)).toBe(0n);
+      expect(floorDiv(10, 3)).toBe(BigInt(3));
+      expect(floorDiv(9, 3)).toBe(BigInt(3));
+      expect(floorDiv(11, 3)).toBe(BigInt(3));
+      expect(floorDiv(0, 5)).toBe(BigInt(0));
     });
     
     test('handles negative numbers correctly', () => {
-      expect(ceilDiv(-10, 3)).toBe(-3n);
-      expect(floorDiv(-10, 3)).toBe(-4n);
-      expect(ceilDiv(10, -3)).toBe(-3n);
-      expect(floorDiv(10, -3)).toBe(-4n);
+      expect(ceilDiv(-10, 3)).toBe(-BigInt(3));
+      expect(floorDiv(-10, 3)).toBe(-BigInt(4));
+      expect(ceilDiv(10, -3)).toBe(-BigInt(3));
+      expect(floorDiv(10, -3)).toBe(-BigInt(4));
     });
     
     test('throws on division by zero', () => {
@@ -228,36 +228,36 @@ describe('Utility Functions', () => {
     });
     
     test('calculates bit length for BigInt values', () => {
-      expect(bitLength(0n)).toBe(1);
-      expect(bitLength(1n)).toBe(1);
-      expect(bitLength(2n)).toBe(2);
-      expect(bitLength(3n)).toBe(2);
-      expect(bitLength(4n)).toBe(3);
-      expect(bitLength(7n)).toBe(3);
-      expect(bitLength(8n)).toBe(4);
-      expect(bitLength(255n)).toBe(8);
-      expect(bitLength(256n)).toBe(9);
+      expect(bitLength(BigInt(0))).toBe(1);
+      expect(bitLength(BigInt(1))).toBe(1);
+      expect(bitLength(BigInt(2))).toBe(2);
+      expect(bitLength(BigInt(3))).toBe(2);
+      expect(bitLength(BigInt(4))).toBe(3);
+      expect(bitLength(BigInt(7))).toBe(3);
+      expect(bitLength(BigInt(8))).toBe(4);
+      expect(bitLength(BigInt(255))).toBe(8);
+      expect(bitLength(BigInt(256))).toBe(9);
       expect(bitLength(BigInt(Number.MAX_SAFE_INTEGER))).toBe(54);
       
       // Test large BigInt values
-      expect(bitLength(1n << 100n)).toBe(101);
-      expect(bitLength(1n << 1000n)).toBe(1001);
+      expect(bitLength(BigInt(1) << BigInt(100))).toBe(101);
+      expect(bitLength(BigInt(1) << BigInt(1000))).toBe(1001);
     });
     
     test('calculates bit length for negative BigInt values', () => {
-      expect(bitLength(-1n)).toBe(1);
-      expect(bitLength(-2n)).toBe(2);
-      expect(bitLength(-3n)).toBe(2);
-      expect(bitLength(-4n)).toBe(3);
-      expect(bitLength(-7n)).toBe(3);
-      expect(bitLength(-8n)).toBe(4);
-      expect(bitLength(-255n)).toBe(8);
-      expect(bitLength(-256n)).toBe(9);
+      expect(bitLength(-BigInt(1))).toBe(1);
+      expect(bitLength(-BigInt(2))).toBe(2);
+      expect(bitLength(-BigInt(3))).toBe(2);
+      expect(bitLength(-BigInt(4))).toBe(3);
+      expect(bitLength(-BigInt(7))).toBe(3);
+      expect(bitLength(-BigInt(8))).toBe(4);
+      expect(bitLength(-BigInt(255))).toBe(8);
+      expect(bitLength(-BigInt(256))).toBe(9);
       expect(bitLength(-BigInt(Number.MAX_SAFE_INTEGER))).toBe(54);
       
       // Test large negative BigInt values
-      expect(bitLength(-(1n << 100n))).toBe(101);
-      expect(bitLength(-(1n << 1000n))).toBe(1001);
+      expect(bitLength(-(BigInt(1) << BigInt(100)))).toBe(101);
+      expect(bitLength(-(BigInt(1) << BigInt(1000)))).toBe(1001);
     });
   });
   
@@ -266,36 +266,36 @@ describe('Utility Functions', () => {
       expect(exactlyEquals(0, 0)).toBe(true);
       expect(exactlyEquals(1, 1)).toBe(true);
       expect(exactlyEquals(1, 2)).toBe(false);
-      expect(exactlyEquals(0n, 0n)).toBe(true);
-      expect(exactlyEquals(1n, 1n)).toBe(true);
-      expect(exactlyEquals(1n, 2n)).toBe(false);
+      expect(exactlyEquals(BigInt(0), BigInt(0))).toBe(true);
+      expect(exactlyEquals(BigInt(1), BigInt(1))).toBe(true);
+      expect(exactlyEquals(BigInt(1), BigInt(2))).toBe(false);
       expect(exactlyEquals('a', 'a')).toBe(true);
       expect(exactlyEquals('a', 'b')).toBe(false);
     });
     
     test('compares number and BigInt values', () => {
-      expect(exactlyEquals(0, 0n)).toBe(true);
-      expect(exactlyEquals(1, 1n)).toBe(true);
-      expect(exactlyEquals(2, 2n)).toBe(true);
-      expect(exactlyEquals(1, 2n)).toBe(false);
-      expect(exactlyEquals(2, 1n)).toBe(false);
-      expect(exactlyEquals(0n, 0)).toBe(true);
-      expect(exactlyEquals(1n, 1)).toBe(true);
-      expect(exactlyEquals(2n, 2)).toBe(true);
-      expect(exactlyEquals(1n, 2)).toBe(false);
-      expect(exactlyEquals(2n, 1)).toBe(false);
+      expect(exactlyEquals(0, BigInt(0))).toBe(true);
+      expect(exactlyEquals(1, BigInt(1))).toBe(true);
+      expect(exactlyEquals(2, BigInt(2))).toBe(true);
+      expect(exactlyEquals(1, BigInt(2))).toBe(false);
+      expect(exactlyEquals(2, BigInt(1))).toBe(false);
+      expect(exactlyEquals(BigInt(0), 0)).toBe(true);
+      expect(exactlyEquals(BigInt(1), 1)).toBe(true);
+      expect(exactlyEquals(BigInt(2), 2)).toBe(true);
+      expect(exactlyEquals(BigInt(1), 2)).toBe(false);
+      expect(exactlyEquals(BigInt(2), 1)).toBe(false);
     });
     
     test('handles non-integer number to BigInt comparisons', () => {
-      expect(exactlyEquals(1.5, 1n)).toBe(false);
-      expect(exactlyEquals(1n, 1.5)).toBe(false);
+      expect(exactlyEquals(1.5, BigInt(1))).toBe(false);
+      expect(exactlyEquals(BigInt(1), 1.5)).toBe(false);
     });
     
     test('handles different types that cannot be compared', () => {
       expect(exactlyEquals(1, '1')).toBe(false);
-      expect(exactlyEquals(1n, '1')).toBe(false);
+      expect(exactlyEquals(BigInt(1), '1')).toBe(false);
       expect(exactlyEquals('1', 1)).toBe(false);
-      expect(exactlyEquals('1', 1n)).toBe(false);
+      expect(exactlyEquals('1', BigInt(1))).toBe(false);
       expect(exactlyEquals(null, undefined)).toBe(false);
       expect(exactlyEquals([], {})).toBe(false);
     });
@@ -317,9 +317,9 @@ describe('Utility Functions', () => {
     
     test('converts BigInt values to byte arrays and back', () => {
       const testCases = [
-        0n, 1n, 255n, 256n, 65535n, 65536n, 16777215n, 16777216n,
-        -1n, -255n, -256n, -65535n, -65536n,
-        1n << 100n, -(1n << 100n)
+        BigInt(0), BigInt(1), BigInt(255), BigInt(256), BigInt(65535), BigInt(65536), BigInt(16777215), BigInt(16777216),
+        -BigInt(1), -BigInt(255), -BigInt(256), -BigInt(65535), -BigInt(65536),
+        BigInt(1) << BigInt(100), -(BigInt(1) << BigInt(100))
       ];
       
       for (const value of testCases) {
@@ -333,13 +333,13 @@ describe('Utility Functions', () => {
       const bytes = toByteArray(0);
       expect(bytes.length).toBe(1);
       expect(bytes[0]).toBe(0);
-      expect(fromByteArray(bytes)).toBe(0n);
+      expect(fromByteArray(bytes)).toBe(BigInt(0));
     });
     
     test('handles negative values correctly', () => {
       const bytes = toByteArray(-123);
       expect(bytes[bytes.length - 1]).toBe(0xFF); // Sign byte
-      expect(fromByteArray(bytes)).toBe(-123n);
+      expect(fromByteArray(bytes)).toBe(-BigInt(123));
     });
   });
   
@@ -350,9 +350,9 @@ describe('Utility Functions', () => {
       expect(isSafeInteger(-1)).toBe(true);
       expect(isSafeInteger(Number.MAX_SAFE_INTEGER)).toBe(true);
       expect(isSafeInteger(Number.MIN_SAFE_INTEGER)).toBe(true);
-      expect(isSafeInteger(0n)).toBe(true);
-      expect(isSafeInteger(1n)).toBe(true);
-      expect(isSafeInteger(-1n)).toBe(true);
+      expect(isSafeInteger(BigInt(0))).toBe(true);
+      expect(isSafeInteger(BigInt(1))).toBe(true);
+      expect(isSafeInteger(-BigInt(1))).toBe(true);
       expect(isSafeInteger(BigInt(Number.MAX_SAFE_INTEGER))).toBe(true);
       expect(isSafeInteger(BigInt(Number.MIN_SAFE_INTEGER))).toBe(true);
     });
@@ -360,8 +360,8 @@ describe('Utility Functions', () => {
     test('identifies unsafe integers', () => {
       expect(isSafeInteger(Number.MAX_SAFE_INTEGER + 1)).toBe(false);
       expect(isSafeInteger(Number.MIN_SAFE_INTEGER - 1)).toBe(false);
-      expect(isSafeInteger(BigInt(Number.MAX_SAFE_INTEGER) + 1n)).toBe(false);
-      expect(isSafeInteger(BigInt(Number.MIN_SAFE_INTEGER) - 1n)).toBe(false);
+      expect(isSafeInteger(BigInt(Number.MAX_SAFE_INTEGER) + BigInt(1))).toBe(false);
+      expect(isSafeInteger(BigInt(Number.MIN_SAFE_INTEGER) - BigInt(1))).toBe(false);
       expect(isSafeInteger(1.5)).toBe(false);
     });
   });
@@ -376,11 +376,11 @@ describe('Utility Functions', () => {
     });
     
     test('returns correct sign for BigInt values', () => {
-      expect(sign(0n)).toBe(0);
-      expect(sign(1n)).toBe(1);
-      expect(sign(100n)).toBe(1);
-      expect(sign(-1n)).toBe(-1);
-      expect(sign(-100n)).toBe(-1);
+      expect(sign(BigInt(0))).toBe(0);
+      expect(sign(BigInt(1))).toBe(1);
+      expect(sign(BigInt(100))).toBe(1);
+      expect(sign(-BigInt(1))).toBe(-1);
+      expect(sign(-BigInt(100))).toBe(-1);
     });
   });
   
@@ -394,11 +394,11 @@ describe('Utility Functions', () => {
     });
     
     test('returns absolute value for BigInt values', () => {
-      expect(abs(0n)).toBe(0n);
-      expect(abs(1n)).toBe(1n);
-      expect(abs(-1n)).toBe(1n);
-      expect(abs(100n)).toBe(100n);
-      expect(abs(-100n)).toBe(100n);
+      expect(abs(BigInt(0))).toBe(BigInt(0));
+      expect(abs(BigInt(1))).toBe(BigInt(1));
+      expect(abs(-BigInt(1))).toBe(BigInt(1));
+      expect(abs(BigInt(100))).toBe(BigInt(100));
+      expect(abs(-BigInt(100))).toBe(BigInt(100));
     });
   });
   
@@ -438,33 +438,33 @@ describe('Utility Functions', () => {
     });
     
     test('identifies powers of two for BigInt values', () => {
-      expect(isPowerOfTwo(1n)).toBe(true);
-      expect(isPowerOfTwo(2n)).toBe(true);
-      expect(isPowerOfTwo(4n)).toBe(true);
-      expect(isPowerOfTwo(8n)).toBe(true);
-      expect(isPowerOfTwo(16n)).toBe(true);
-      expect(isPowerOfTwo(32n)).toBe(true);
-      expect(isPowerOfTwo(64n)).toBe(true);
-      expect(isPowerOfTwo(128n)).toBe(true);
-      expect(isPowerOfTwo(256n)).toBe(true);
-      expect(isPowerOfTwo(512n)).toBe(true);
-      expect(isPowerOfTwo(1024n)).toBe(true);
-      expect(isPowerOfTwo(1n << 100n)).toBe(true);
+      expect(isPowerOfTwo(BigInt(1))).toBe(true);
+      expect(isPowerOfTwo(BigInt(2))).toBe(true);
+      expect(isPowerOfTwo(BigInt(4))).toBe(true);
+      expect(isPowerOfTwo(BigInt(8))).toBe(true);
+      expect(isPowerOfTwo(BigInt(16))).toBe(true);
+      expect(isPowerOfTwo(BigInt(32))).toBe(true);
+      expect(isPowerOfTwo(BigInt(64))).toBe(true);
+      expect(isPowerOfTwo(BigInt(128))).toBe(true);
+      expect(isPowerOfTwo(BigInt(256))).toBe(true);
+      expect(isPowerOfTwo(BigInt(512))).toBe(true);
+      expect(isPowerOfTwo(BigInt(1024))).toBe(true);
+      expect(isPowerOfTwo(BigInt(1) << BigInt(100))).toBe(true);
     });
     
     test('identifies non-powers of two for BigInt values', () => {
-      expect(isPowerOfTwo(0n)).toBe(false);
-      expect(isPowerOfTwo(3n)).toBe(false);
-      expect(isPowerOfTwo(5n)).toBe(false);
-      expect(isPowerOfTwo(6n)).toBe(false);
-      expect(isPowerOfTwo(7n)).toBe(false);
-      expect(isPowerOfTwo(9n)).toBe(false);
-      expect(isPowerOfTwo(10n)).toBe(false);
-      expect(isPowerOfTwo(15n)).toBe(false);
-      expect(isPowerOfTwo(-1n)).toBe(false);
-      expect(isPowerOfTwo(-2n)).toBe(false);
-      expect(isPowerOfTwo(-4n)).toBe(false);
-      expect(isPowerOfTwo((1n << 100n) + 1n)).toBe(false);
+      expect(isPowerOfTwo(BigInt(0))).toBe(false);
+      expect(isPowerOfTwo(BigInt(3))).toBe(false);
+      expect(isPowerOfTwo(BigInt(5))).toBe(false);
+      expect(isPowerOfTwo(BigInt(6))).toBe(false);
+      expect(isPowerOfTwo(BigInt(7))).toBe(false);
+      expect(isPowerOfTwo(BigInt(9))).toBe(false);
+      expect(isPowerOfTwo(BigInt(10))).toBe(false);
+      expect(isPowerOfTwo(BigInt(15))).toBe(false);
+      expect(isPowerOfTwo(-BigInt(1))).toBe(false);
+      expect(isPowerOfTwo(-BigInt(2))).toBe(false);
+      expect(isPowerOfTwo(-BigInt(4))).toBe(false);
+      expect(isPowerOfTwo((BigInt(1) << BigInt(100)) + BigInt(1))).toBe(false);
     });
   });
   
@@ -542,14 +542,14 @@ describe('MathUtils Model Implementation', () => {
       
       const result1 = await model.process({
         operation: 'bitLength',
-        params: [1234n]
+        params: [BigInt(1234)]
       });
       
       expect(result1).toBe(11);
       
       const result2 = await model.process({
         operation: 'exactlyEquals',
-        params: [123, 123n]
+        params: [123, BigInt(123)]
       });
       
       expect(result2).toBe(true);
@@ -565,9 +565,9 @@ describe('MathUtils Model Implementation', () => {
       });
       
       // Perform some operations to update state
-      model.bitLength(1234n);
-      model.bitLength(5678n);
-      model.bitLength(1234n); // Cache hit
+      model.bitLength(BigInt(1234));
+      model.bitLength(BigInt(5678));
+      model.bitLength(BigInt(1234)); // Cache hit
       
       const state = model.getState();
       
@@ -589,8 +589,8 @@ describe('MathUtils Model Implementation', () => {
       });
       
       // Perform some operations to populate cache
-      model.bitLength(1234n);
-      model.bitLength(5678n);
+      model.bitLength(BigInt(1234));
+      model.bitLength(BigInt(5678));
       
       // Verify cache is populated
       let state = model.getState();
@@ -627,10 +627,10 @@ describe('MathUtils Model Implementation', () => {
       });
       
       // First call (cache miss)
-      model.bitLength(1234567890n);
+      model.bitLength(BigInt(1234567890));
       
       // Second call (cache hit)
-      model.bitLength(1234567890n);
+      model.bitLength(BigInt(1234567890));
       
       const state = model.getState();
       expect(state.cache?.bitLengthCacheHits).toBe(1);
@@ -645,10 +645,10 @@ describe('MathUtils Model Implementation', () => {
       });
       
       // First call
-      model.bitLength(1234567890n);
+      model.bitLength(BigInt(1234567890));
       
       // Second call
-      model.bitLength(1234567890n);
+      model.bitLength(BigInt(1234567890));
       
       const state = model.getState();
       expect(state.cache?.bitLengthCacheHits).toBe(0);

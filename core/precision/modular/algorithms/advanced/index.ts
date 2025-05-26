@@ -54,7 +54,7 @@ const DEFAULT_OPTIONS: AdvancedModularOptions = {
  * 
  * The algorithm splits the numbers into two parts and uses the formula:
  * a*b = (a_high * 10^n + a_low) * (b_high * 10^n + b_low)
- *     = a_high * b_high * 10^(2n) + (a_high * b_low + a_low * b_high) * 10^n + a_low * b_low
+ *     = a_high * b_high * 10^(BigInt(2)) + (a_high * b_low + a_low * b_high) * 10^n + a_low * b_low
  * 
  * This reduces the number of multiplications from O(n^2) to O(n^1.585)
  */
@@ -74,10 +74,10 @@ export function karatsubaMultiply(
   // Base case: use native multiplication for small numbers
   const KARATSUBA_THRESHOLD = 64; // Threshold in bits
   
-  if (a === 0n || b === 0n) return 0n;
+  if (a === BigInt(0) || b === BigInt(0)) return BigInt(0);
   
-  const aBits = bitLength(a < 0n ? -a : a);
-  const bBits = bitLength(b < 0n ? -b : b);
+  const aBits = bitLength(a < BigInt(0) ? -a : a);
+  const bBits = bitLength(b < BigInt(0) ? -b : b);
   
   if (aBits <= KARATSUBA_THRESHOLD || bBits <= KARATSUBA_THRESHOLD) {
     if (opts.debug && opts.logger) {
@@ -104,7 +104,7 @@ export function karatsubaMultiply(
   const m2 = Math.floor(m / 2);
   
   // Split the numbers
-  const mask = (1n << BigInt(m2)) - 1n;
+  const mask = (BigInt(1) << BigInt(m2)) - BigInt(1);
   const aHigh = a >> BigInt(m2);
   const aLow = a & mask;
   const bHigh = b >> BigInt(m2);
@@ -122,7 +122,7 @@ export function karatsubaMultiply(
   const z1 = karatsubaMultiply(aLow + aHigh, bLow + bHigh, opts) - z0 - z2;
   
   // Combine results
-  const result = (z2 << BigInt(2 * m2)) + (z1 << BigInt(m2)) + z0;
+  const result = (z2 << (BigInt(2) * BigInt(m2))) + (z1 << BigInt(m2)) + z0;
   
   if (opts.debug && opts.logger) {
     opts.logger.debug(`karatsubaMultiply result: ${result}`).catch(() => {});
@@ -189,7 +189,7 @@ export function montgomeryReduction(
   }
   
   // Check if m is odd (required for Montgomery reduction)
-  if (m % 2n === 0n) {
+  if (m % BigInt(2) === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`Montgomery reduction requires odd modulus, using standard mod`).catch(() => {});
     }
@@ -198,9 +198,9 @@ export function montgomeryReduction(
   
   // Calculate parameters
   const n = bitLength(m);
-  const r = 1n << BigInt(n); // r = 2^n
+  const r = BigInt(1) << BigInt(n); // r = 2^n
   const rInverse = modInversePowerOfTwo(m, r);
-  const mPrime = (r * rInverse - 1n) / m;
+  const mPrime = (r * rInverse - BigInt(1)) / m;
   
   if (opts.debug && opts.logger) {
     opts.logger.debug(`Montgomery parameters: n=${n}, r=${r}, r_inverse=${rInverse}, m_prime=${mPrime}`).catch(() => {});
@@ -211,11 +211,11 @@ export function montgomeryReduction(
   
   // Reduction
   let t = aBar;
-  const mask = r - 1n;
+  const mask = r - BigInt(1);
   
   for (let i = 0; i < n; i++) {
-    const ui = (t & 1n) * mPrime;
-    t = (t + ui * m) >> 1n;
+    const ui = (t & BigInt(1)) * mPrime;
+    t = (t + ui * m) >> BigInt(1);
   }
   
   if (t >= m) {
@@ -235,15 +235,15 @@ export function montgomeryReduction(
  */
 function modInversePowerOfTwo(a: bigint, m: bigint): bigint {
   // m must be a power of 2
-  if ((m & (m - 1n)) !== 0n) {
+  if ((m & (m - BigInt(1))) !== BigInt(0)) {
     throw new Error('Modulus must be a power of 2');
   }
   
-  let x = 1n;
+  let x = BigInt(1);
   
   // Newton's method for finding modular inverse
   for (let i = 0; i < 5; i++) { // Usually converges in a few iterations
-    x = x * (2n - a * x); // x = x * (2 - a*x)
+    x = x * (BigInt(2) - a * x); // x = x * (2 - a*x)
     x = x % m;
   }
   
@@ -287,11 +287,11 @@ export function numberTheoreticTransform(
   }
   
   // Calculate the root of unity
-  let omega = modPow(primitiveRoot, (modulus - 1n) / order, modulus);
+  let omega = modPow(primitiveRoot, (modulus - BigInt(1)) / order, modulus);
   
   if (inverse) {
     // For inverse NTT, use the inverse of omega
-    omega = modPow(omega, modulus - 2n, modulus); // omega^-1 = omega^(p-2) mod p
+    omega = modPow(omega, modulus - BigInt(2), modulus); // omega^-1 = omega^(p-2) mod p
   }
   
   if (opts.debug && opts.logger) {
@@ -303,7 +303,7 @@ export function numberTheoreticTransform(
   
   // For inverse NTT, multiply by n^-1 mod p
   if (inverse) {
-    const nInverse = modPow(BigInt(n), modulus - 2n, modulus);
+    const nInverse = modPow(BigInt(n), modulus - BigInt(2), modulus);
     for (let i = 0; i < n; i++) {
       result[i] = (result[i] * nInverse) % modulus;
     }
@@ -343,7 +343,7 @@ function nttRecursive(
   
   // Combine results
   const y = new Array(n);
-  let omegaPow = 1n;
+  let omegaPow = BigInt(1);
   
   for (let k = 0; k < n / 2; k++) {
     const t = (omegaPow * yOdd[k]) % modulus;
@@ -363,30 +363,30 @@ function findPrimitiveRoot(
   order: bigint
 ): bigint | null {
   // Check if p is prime (simplified check)
-  for (let i = 2n; i * i <= p; i++) {
-    if (p % i === 0n) {
+  for (let i = BigInt(2); i * i <= p; i++) {
+    if (p % i === BigInt(0)) {
       return null; // p is not prime
     }
   }
   
   // Check if order divides p-1
-  if ((p - 1n) % order !== 0n) {
+  if ((p - BigInt(1)) % order !== BigInt(0)) {
     return null;
   }
   
   // Find a primitive root
-  const k = (p - 1n) / order;
+  const k = (p - BigInt(1)) / order;
   
-  for (let g = 2n; g < p; g++) {
+  for (let g = BigInt(2); g < p; g++) {
     const root = modPow(g, k, p);
     
     // Check if root has the correct order
-    if (modPow(root, order, p) === 1n) {
+    if (modPow(root, order, p) === BigInt(1)) {
       let isValid = true;
       
       // Check if root^(order/q) != 1 for all prime factors q of order
       // (simplified: just check if root^(order/2) != 1 if order is even)
-      if (order % 2n === 0n && modPow(root, order / 2n, p) === 1n) {
+      if (order % BigInt(2) === BigInt(0) && modPow(root, order / BigInt(2), p) === BigInt(1)) {
         isValid = false;
       }
       
@@ -403,17 +403,17 @@ function findPrimitiveRoot(
  * Modular exponentiation helper for NTT
  */
 function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
-  if (exponent === 0n) return 1n;
+  if (exponent === BigInt(0)) return BigInt(1);
   
-  let result = 1n;
+  let result = BigInt(1);
   let b = base % modulus;
   let e = exponent;
   
-  while (e > 0n) {
-    if (e % 2n === 1n) {
+  while (e > BigInt(0)) {
+    if (e % BigInt(2) === BigInt(1)) {
       result = (result * b) % modulus;
     }
-    e >>= 1n;
+    e >>= BigInt(1);
     b = (b * b) % modulus;
   }
   

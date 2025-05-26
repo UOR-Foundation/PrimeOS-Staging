@@ -115,7 +115,7 @@ export function mod(
   const aBig = BigInt(a);
   let bBig = BigInt(b);
   
-  if (bBig === 0n) {
+  if (bBig === BigInt(0)) {
     const error = createDivisionByZeroError('modulo operation');
     if (opts.debug && opts.logger) {
       opts.logger.error('Error in mod:', error).catch(() => {});
@@ -124,14 +124,14 @@ export function mod(
   }
   
   // Handle negative modulus by taking absolute value
-  if (bBig < 0n) {
+  if (bBig < BigInt(0)) {
     bBig = -bBig;
   }
   
   // Check operation size in strict mode
   if (opts.strict) {
-    const aBits = bitLength(aBig < 0n ? -aBig : aBig);
-    const bBits = bitLength(bBig < 0n ? -bBig : bBig);
+    const aBits = bitLength(aBig < BigInt(0) ? -aBig : aBig);
+    const bBits = bitLength(bBig < BigInt(0) ? -bBig : bBig);
     
     if (Math.max(aBits, bBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
       const error = createBitSizeError(
@@ -184,7 +184,7 @@ export function modMul(
   const bBig = BigInt(b);
   const mBig = BigInt(m);
   
-  if (mBig === 0n) {
+  if (mBig === BigInt(0)) {
     const error = createDivisionByZeroError('modular multiplication');
     if (opts.debug && opts.logger) {
       opts.logger.error('Error in modMul:', error).catch(() => {});
@@ -194,9 +194,9 @@ export function modMul(
   
   // Check operation size in strict mode
   if (opts.strict) {
-    const aBits = bitLength(aBig < 0n ? -aBig : aBig);
-    const bBits = bitLength(bBig < 0n ? -bBig : bBig);
-    const mBits = bitLength(mBig < 0n ? -mBig : mBig);
+    const aBits = bitLength(aBig < BigInt(0) ? -aBig : aBig);
+    const bBits = bitLength(bBig < BigInt(0) ? -bBig : bBig);
+    const mBits = bitLength(mBig < BigInt(0) ? -mBig : mBig);
     
     if (Math.max(aBits, bBits, mBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
       const error = createBitSizeError(
@@ -216,7 +216,7 @@ export function modMul(
       bitLength(aBig) + bitLength(bBig) <= (opts.nativeThreshold || MODULAR_CONSTANTS.MAX_NATIVE_BITS)) {
     // Ensure Python-compatible modulo behavior for negative results
     let result = (aBig * bBig) % mBig;
-    if (result < 0n) {
+    if (result < BigInt(0)) {
       result = (result + mBig) % mBig;
     }
     if (opts.debug && opts.logger) {
@@ -227,7 +227,7 @@ export function modMul(
   
   // For large numbers, use the binary multiplication algorithm
   // This prevents overflow by reducing intermediate results
-  let result = 0n;
+  let result = BigInt(0);
   let x = aBig;
   let y = bBig;
   
@@ -240,12 +240,12 @@ export function modMul(
   }
   
   // Binary multiplication algorithm (Russian peasant algorithm)
-  while (y > 0n) {
-    if (y & 1n) {
+  while (y > BigInt(0)) {
+    if (y & BigInt(1)) {
       result = (result + x) % mBig;
     }
-    x = (x << 1n) % mBig;
-    y >>= 1n;
+    x = (x << BigInt(1)) % mBig;
+    y >>= BigInt(1);
   }
   
   if (opts.debug && opts.logger) {

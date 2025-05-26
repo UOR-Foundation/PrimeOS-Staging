@@ -14,9 +14,9 @@ import { ModelResult, ModelLifecycleState, BaseModel } from './os-model-mock';
 export const BIGINT_MOCK_CONSTANTS = {
   DEFAULT_BIT_LENGTH: 64,
   DEFAULT_PRIME_RESULT: true,
-  DEFAULT_ZERO: 0n,
-  DEFAULT_ONE: 1n,
-  DEFAULT_TWO: 2n
+  DEFAULT_ZERO: BigInt(0),
+  DEFAULT_ONE: BigInt(1),
+  DEFAULT_TWO: BigInt(2)
 };
 
 /**
@@ -174,12 +174,12 @@ export function createMockBigInt(options: BigIntOptions = {}): MockBigIntInterfa
     
     fromByteArray: (bytes: Uint8Array) => {
       metrics.operationCount++;
-      return 0n;
+      return BigInt(0);
     },
     
     getRandomBigInt: (bitLength?: number) => {
       metrics.operationCount++;
-      return 42n;
+      return BigInt(42);
     },
     
     isProbablePrime: (value: bigint) => {
@@ -205,7 +205,7 @@ export function createMockBigInt(options: BigIntOptions = {}): MockBigIntInterfa
     
     setBit: (value: bigint, bitIndex: number, bitValue: 0 | 1) => {
       metrics.operationCount++;
-      return 0n;
+      return BigInt(0);
     },
     
     modPow: (base: bigint, exponent: bigint, modulus: bigint) => {

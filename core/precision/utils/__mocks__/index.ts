@@ -1,59 +1,335 @@
 /**
- * Utility Module Mocks Export
- * ==========================
+ * Utils Module Mock Exports
  * 
- * This file exports mocks for the utility module that can be used by other modules
- * in their tests. It follows the PrimeOS module pattern for mocking.
+ * This file exports mocks for the utils module that can be used by other modules
+ * in their tests. It leverages the cache mocks for proper integration.
  */
 
 // Re-export model and logging mocks
-export * from './os-model-mock';
-export * from './os-logging-mock';
+export * from '../__mocks__/os-model-mock';
+export * from '../__mocks__/os-logging-mock';
 
-// Export utility specific mocks
-export * from './test-mock';
+// Import cache mocks for integration
+import { createMockCache } from '../../cache/__mocks__';
 
-// Import the original types from the utility module
+// Import types for mocking
 import { 
-  MathUtilsInterface, 
-  MathUtilsModelInterface,
-  MathUtilsModelOptions,
-  MathUtilsModelState,
-  MathUtilsProcessInput,
-  UTILITY_CONSTANTS
+  MathUtilsModelInterface, 
+  MathUtilsModelOptions, 
+  MathUtilsModelState 
 } from '../types';
+import { ModelResult, ModelLifecycleState } from '../__mocks__/os-model-mock';
+import { createLogging } from '../__mocks__/os-logging-mock';
 
-// Re-export the types for convenience
-export {
-  MathUtilsInterface, 
-  MathUtilsModelInterface,
-  MathUtilsModelOptions,
-  MathUtilsModelState,
-  MathUtilsProcessInput,
-  UTILITY_CONSTANTS
-};
+/**
+ * Create a mock MathUtils implementation that integrates with cache mocks
+ */
+export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsModelInterface {
+  // Create a mock cache instance using the cache mocks
+  const mockCache = options.enableCache !== false ? createMockCache({
+    name: 'bitLength-cache',
+    maxSize: 1000,
+    metrics: true
+  }) : null;
 
-// Re-export the main createMockMathUtils function as the default factory
-export { 
-  createMockMathUtils, 
-  createMockMathUtilsModel,
-  mockMathUtils,
-  mockMathUtilsModel,
-  UTILS_MOCK_CONSTANTS
-} from './test-mock';
+  const state: MathUtilsModelState = {
+    lifecycle: ModelLifecycleState.Uninitialized,
+    lastStateChangeTime: Date.now(),
+    uptime: 0,
+    operationCount: {
+      total: 0,
+      success: 0,
+      failed: 0
+    },
+    config: {
+      enableCache: options.enableCache !== false,
+      useOptimized: options.useOptimized !== false,
+      strict: options.strict || false,
+      ...options
+    },
+    cache: {
+      bitLengthCacheSize: 0,
+      bitLengthCacheHits: 0,
+      bitLengthCacheMisses: 0
+    }
+  };
 
-// Import Jest globals to use in the test function
-import { describe, it, expect } from '@jest/globals';
+  // Helper function for GCD calculation
+  const calculateGcd = (a: bigint, b: bigint): bigint => {
+    let bigA = a < 0n ? -a : a;
+    let bigB = b < 0n ? -b : b;
+    
+    while (bigB !== 0n) {
+      const temp = bigB;
+      bigB = bigA % bigB;
+      bigA = temp;
+    }
+    
+    return bigA;
+  };
 
-// Create a convenient test function to run all tests in this directory
-export function runUtilsMockTests() {
-  describe('Utility Mocks Test Runner', () => {
-    it('successfully loads mock tests', () => {
-      // This is just a simple test to verify the test runner works
-      expect(true).toBe(true);
-    });
-  });
-  
-  // Import and run the mock tests
-  require('./mock.test.ts');
+  return {
+    // Math utility interface methods with proper cache integration
+    bitLength: jest.fn().mockImplementation((value: bigint | number) => {
+      const result = typeof value === 'bigint' 
+        ? value.toString(2).length
+        : Math.floor(Math.log2(Math.abs(value))) + 1;
+      
+      // Simulate cache behavior if enabled
+      if (mockCache && state.config.enableCache) {
+        const cacheKey = String(value);
+        if (mockCache.has(cacheKey)) {
+          state.cache!.bitLengthCacheHits += 1;
+        } else {
+          state.cache!.bitLengthCacheMisses += 1;
+          mockCache.set(cacheKey, result);
+        }
+        
+        // Update cache size from mock cache metrics
+        const metrics = mockCache.getMetrics();
+        state.cache!.bitLengthCacheSize = metrics.currentSize;
+      }
+      
+      return result;
+    }),
+    
+    exactlyEquals: jest.fn().mockImplementation((a: any, b: any) => {
+      return a === b;
+    }),
+    
+    toByteArray: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      const hex = bigintValue.toString(16);
+      const bytes = new Uint8Array(Math.ceil(hex.length / 2));
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return bytes;
+    }),
+    
+    fromByteArray: jest.fn().mockImplementation((bytes: Uint8Array) => {
+      let hex = '';
+      for (const byte of bytes) {
+        hex += byte.toString(16).padStart(2, '0');
+      }
+      return BigInt('0x' + hex);
+    }),
+    
+    isSafeInteger: jest.fn().mockImplementation((value: bigint | number) => {
+      if (typeof value === 'bigint') {
+        return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER);
+      }
+      return Number.isSafeInteger(value);
+    }),
+    
+    sign: jest.fn().mockImplementation((value: bigint | number) => {
+      if (typeof value === 'bigint') {
+        return value > 0n ? 1 : value < 0n ? -1 : 0;
+      }
+      return Math.sign(value);
+    }),
+    
+    abs: jest.fn().mockImplementation((value: bigint | number) => {
+      if (typeof value === 'bigint') {
+        return value < 0n ? -value : value;
+      }
+      return Math.abs(value);
+    }),
+    
+    isPowerOfTwo: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      return bigintValue > 0n && (bigintValue & (bigintValue - 1n)) === 0n;
+    }),
+    
+    gcd: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
+      const bigA = typeof a === 'bigint' ? a : BigInt(a);
+      const bigB = typeof b === 'bigint' ? b : BigInt(b);
+      const result = calculateGcd(bigA, bigB);
+      
+      return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
+    }),
+    
+    lcm: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
+      const bigA = typeof a === 'bigint' ? a : BigInt(a);
+      const bigB = typeof b === 'bigint' ? b : BigInt(b);
+      const gcdValue = calculateGcd(bigA, bigB);
+      const result = (bigA * bigB) / gcdValue;
+      
+      return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
+    }),
+    
+    extendedGcd: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
+      let bigA = typeof a === 'bigint' ? a : BigInt(a);
+      let bigB = typeof b === 'bigint' ? b : BigInt(b);
+      
+      let oldR = bigA, r = bigB;
+      let oldS = 1n, s = 0n;
+      let oldT = 0n, t = 1n;
+      
+      while (r !== 0n) {
+        const quotient = oldR / r;
+        [oldR, r] = [r, oldR - quotient * r];
+        [oldS, s] = [s, oldS - quotient * s];
+        [oldT, t] = [t, oldT - quotient * t];
+      }
+      
+      return [oldR, oldS, oldT] as [bigint, bigint, bigint];
+    }),
+    
+    integerSqrt: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      if (bigintValue < 0n) throw new Error('Cannot calculate square root of negative number');
+      if (bigintValue === 0n) return typeof value === 'number' ? 0 : 0n;
+      
+      let x = bigintValue;
+      let y = (x + 1n) / 2n;
+      
+      while (y < x) {
+        x = y;
+        y = (x + bigintValue / x) / 2n;
+      }
+      
+      return typeof value === 'number' ? Number(x) : x;
+    }),
+    
+    ceilDiv: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
+      const bigA = typeof a === 'bigint' ? a : BigInt(a);
+      const bigB = typeof b === 'bigint' ? b : BigInt(b);
+      const result = (bigA + bigB - 1n) / bigB;
+      
+      return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
+    }),
+    
+    floorDiv: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
+      const bigA = typeof a === 'bigint' ? a : BigInt(a);
+      const bigB = typeof b === 'bigint' ? b : BigInt(b);
+      const result = bigA / bigB;
+      
+      return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
+    }),
+    
+    countSetBits: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      const binaryStr = bigintValue.toString(2);
+      return (binaryStr.match(/1/g) || []).length;
+    }),
+    
+    leadingZeros: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      const binaryStr = bigintValue.toString(2);
+      let count = 0;
+      for (const bit of binaryStr) {
+        if (bit === '0') count++;
+        else break;
+      }
+      return count;
+    }),
+    
+    trailingZeros: jest.fn().mockImplementation((value: bigint | number) => {
+      const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
+      const binaryStr = bigintValue.toString(2);
+      let count = 0;
+      for (let i = binaryStr.length - 1; i >= 0; i--) {
+        if (binaryStr[i] === '0') count++;
+        else break;
+      }
+      return count;
+    }),
+    
+    // Model interface methods
+    async initialize() {
+      state.lifecycle = ModelLifecycleState.Ready;
+      state.lastStateChangeTime = Date.now();
+      
+      // Initialize the mock cache if enabled
+      if (mockCache) {
+        await mockCache.initialize();
+      }
+      
+      return {
+        success: true,
+        timestamp: Date.now(),
+        source: options.name || 'mock-utils'
+      };
+    },
+    
+    async process(input: any): Promise<any> {
+      state.operationCount.total += 1;
+      state.operationCount.success += 1;
+      return {
+        success: true,
+        data: input,
+        timestamp: Date.now(),
+        source: options.name || 'mock-utils'
+      };
+    },
+    
+    getState() {
+      // Update cache metrics from mock cache if available
+      if (mockCache && state.config.enableCache) {
+        const cacheMetrics = mockCache.getMetrics();
+        state.cache = {
+          bitLengthCacheSize: cacheMetrics.currentSize,
+          bitLengthCacheHits: cacheMetrics.hitCount,
+          bitLengthCacheMisses: cacheMetrics.missCount
+        };
+      }
+      
+      return { ...state };
+    },
+    
+    async reset() {
+      state.operationCount = { total: 0, success: 0, failed: 0 };
+      
+      // Reset the mock cache if available
+      if (mockCache) {
+        await mockCache.reset();
+      }
+      
+      state.cache = {
+        bitLengthCacheSize: 0,
+        bitLengthCacheHits: 0,
+        bitLengthCacheMisses: 0
+      };
+      
+      state.lastStateChangeTime = Date.now();
+      return {
+        success: true,
+        timestamp: Date.now(),
+        source: options.name || 'mock-utils'
+      };
+    },
+    
+    async terminate() {
+      state.lifecycle = ModelLifecycleState.Terminated;
+      state.lastStateChangeTime = Date.now();
+      
+      // Terminate the mock cache if available
+      if (mockCache) {
+        await mockCache.terminate();
+      }
+      
+      return {
+        success: true,
+        timestamp: Date.now(),
+        source: options.name || 'mock-utils'
+      };
+    },
+    
+    createResult<T>(success: boolean, data?: T, error?: string): ModelResult<T> {
+      return {
+        success,
+        data,
+        error,
+        timestamp: Date.now(),
+        source: options.name || 'mock-utils'
+      };
+    }
+  };
 }
+
+// Export default implementation
+export const MathUtils = createMathUtils();
+
+// Re-export types
+export * from '../types';

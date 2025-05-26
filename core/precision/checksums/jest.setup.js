@@ -21,6 +21,24 @@ expect.addSnapshotSerializer({
   print: (val) => `BigInt(${val.toString()})`
 });
 
+// Extend Jest matchers to support BigInt comparisons
+expect.extend({
+  toBeGreaterThanBigInt(received, expected) {
+    const pass = received > expected;
+    if (pass) {
+      return {
+        message: () => `expected ${received} not to be greater than ${expected}`,
+        pass: true,
+      };
+    } else {
+      return {
+        message: () => `expected ${received} to be greater than ${expected}`,
+        pass: false,
+      };
+    }
+  },
+});
+
 // Clean up after all tests
 afterAll(() => {
   // Reset any global state that might affect other tests

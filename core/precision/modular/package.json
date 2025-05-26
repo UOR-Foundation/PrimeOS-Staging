@@ -2,7 +2,7 @@
   "name": "modular",
   "version": "0.1.0",
   "description": "Modular implementation for PrimeOS",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "test": "jest",
     "build": "tsc",

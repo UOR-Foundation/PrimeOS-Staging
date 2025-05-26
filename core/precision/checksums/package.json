@@ -1,8 +1,8 @@
 {
-  "name": "@primeos/core/precision/checksums",
+  "name": "@primeos/core-precision-checksums",
   "version": "1.0.0",
   "description": "Checksums implementation for PrimeOS",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "test": "jest",
     "build": "tsc",

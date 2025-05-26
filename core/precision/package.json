@@ -1,5 +1,5 @@
 {
-  "name": "@primeos/core/precision",
+  "name": "@primeos/core-precision",
   "version": "1.0.0",
   "description": "Precision-enhanced mathematical operations for PrimeOS",
   "main": "dist/index.js",
@@ -8,10 +8,25 @@
     "build": "tsc",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:all": "node run-all-tests.js",
+    "test:ci": "CI=true node run-all-tests.js",
+    "test:individual": "npm run test:bigint && npm run test:cache && npm run test:modular && npm run test:checksums && npm run test:utils && npm run test:verification && npm run test:verification-cache",
+    "test:bigint": "cd bigint && npm test",
+    "test:cache": "cd cache && npm test",
+    "test:modular": "cd modular && npm test",
+    "test:checksums": "cd checksums && npm test",
+    "test:utils": "cd utils && npm test",
+    "test:verification": "cd verification && npm test",
+    "test:verification-cache": "cd verification/cache && npm test",
+    "test:watch": "jest --watch",
+    "test:debug": "node --inspect-brk node_modules/.bin/jest --runInBand",
     "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
     "docs": "typedoc --out docs src",
-    "clean": "rimraf dist coverage docs",
-    "prepare": "npm run build"
+    "clean": "rimraf dist coverage docs test-results.xml coverage-report.json",
+    "prepare": "npm run build",
+    "pretest": "npm run clean",
+    "posttest": "echo 'Tests completed. Check test-results.xml and coverage-report.json for detailed results.'"
   },
   "keywords": [
     "primeos",
@@ -53,18 +68,5 @@
     "dist",
     "README.md",
     "LICENSE"
-  ],
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/*.test.ts"
-    ],
-    "collectCoverageFrom": [
-      "**/*.ts",
-      "!**/*.d.ts",
-      "!**/node_modules/**",
-      "!**/dist/**"
-    ]
-  }
+  ]
 }

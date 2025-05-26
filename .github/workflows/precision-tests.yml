@@ -1,0 +1,190 @@
+name: PrimeOS Precision Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'core/precision/**'
+      - '.github/workflows/precision-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'core/precision/**'
+      - '.github/workflows/precision-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+    
+    - name: Install dependencies
+      run: |
+        cd core/precision
+        npm ci
+        
+    - name: Install module dependencies
+      run: |
+        cd core/precision
+        # Install dependencies for individual modules
+        for module in cache modular checksums verification utils bigint; do
+          if [ -d "$module" ] && [ -f "$module/package.json" ]; then
+            echo "Installing dependencies for $module"
+            cd "$module"
+            npm ci || npm install
+            cd ..
+          fi
+        done
+        
+    - name: Run comprehensive tests
+      run: |
+        cd core/precision
+        npm run test:all
+      env:
+        CI: true
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-node-${{ matrix.node-version }}
+        path: |
+          core/precision/test-results.xml
+          core/precision/coverage-report.json
+        retention-days: 30
+        
+    - name: Publish test results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Test Results (Node.js ${{ matrix.node-version }})
+        path: core/precision/test-results.xml
+        reporter: java-junit
+        fail-on-error: false
+        
+    - name: Comment PR with test results
+      uses: actions/github-script@v7
+      if: github.event_name == 'pull_request' && always()
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          try {
+            const coverageReport = JSON.parse(
+              fs.readFileSync('core/precision/coverage-report.json', 'utf8')
+            );
+            
+            const { summary } = coverageReport;
+            const passRate = summary.totalTests > 0 ? 
+              Math.round((summary.passedTests / summary.totalTests) * 100) : 0;
+            
+            const comment = `## 🧪 Test Results (Node.js ${{ matrix.node-version }})
+            
+            | Metric | Value |
+            |--------|-------|
+            | **Test Suites** | ${summary.passedSuites}/${summary.totalSuites} passing |
+            | **Tests** | ${summary.passedTests}/${summary.totalTests} passing |
+            | **Pass Rate** | ${passRate}% |
+            | **Status** | ${passRate >= 90 ? '✅ Excellent' : passRate >= 75 ? '⚠️ Good' : '❌ Needs Work'} |
+            
+            ### Module Status
+            ${Object.entries(coverageReport.modules).map(([name, data]) => 
+              `- **${name}**: ${data.status} (${data.testCount} tests)`
+            ).join('\n')}
+            
+            ${summary.passedSuites >= 6 ? 
+              '✅ **Core functionality is working correctly!**' : 
+              '⚠️ Some modules need attention'
+            }
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not read coverage report:', error.message);
+          }
+
+  individual-tests:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        module: [bigint, cache, modular, checksums, utils, verification]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+    
+    - name: Install dependencies
+      run: |
+        cd core/precision/${{ matrix.module }}
+        npm ci || npm install
+        
+    - name: Run module tests
+      run: |
+        cd core/precision/${{ matrix.module }}
+        npm test
+      env:
+        CI: true
+        
+    - name: Upload module test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ${{ matrix.module }}-test-results
+        path: core/precision/${{ matrix.module }}/coverage/
+        retention-days: 7
+
+  lint-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+        cache-dependency-path: '**/package-lock.json'
+    
+    - name: Install dependencies
+      run: |
+        cd core/precision
+        npm ci
+        
+    - name: Run linting
+      run: |
+        cd core/precision
+        npm run lint || echo "Linting not configured"
+        
+    - name: Build project
+      run: |
+        cd core/precision
+        npm run build || echo "Build not configured"

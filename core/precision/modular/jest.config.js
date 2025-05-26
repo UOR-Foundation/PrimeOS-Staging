@@ -10,5 +10,11 @@ module.exports = {
     '/node_modules/'
   ],
   rootDir: '.',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  moduleNameMapping: {
+    '^../../../os/model$': '<rootDir>/../../../os/model/__mocks__',
+    '^../../../os/logging$': '<rootDir>/../../../os/logging/__mocks__',
+    '^../../cache$': '<rootDir>/../cache/__mocks__',
+    '^../cache$': '<rootDir>/cache/__mocks__'
+  }
 };

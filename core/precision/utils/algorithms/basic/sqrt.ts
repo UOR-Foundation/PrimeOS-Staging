@@ -26,24 +26,24 @@ export function createSqrtFunctions(options: UtilityOptions = {}) {
     const n = typeof value === 'number' ? BigInt(Math.floor(value)) : value;
     
     // Handle negative inputs
-    if (n < 0n) {
+    if (n < BigInt(0)) {
       if (config.strict) {
         throw createNegativeInputError('integerSqrt', n);
       }
-      return 0n;
+      return BigInt(0);
     }
     
     // Special cases
-    if (n === 0n) return 0n;
-    if (n === 1n) return 1n;
+    if (n === BigInt(0)) return BigInt(0);
+    if (n === BigInt(1)) return BigInt(1);
     
     // Binary search for the integer square root
     let x = n;
-    let y = (x + 1n) / 2n;
+    let y = (x + BigInt(1)) / BigInt(2);
     
     while (y < x) {
       x = y;
-      y = (x + n / x) / 2n;
+      y = (x + n / x) / BigInt(2);
     }
     
     return x;

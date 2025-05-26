@@ -59,9 +59,9 @@ describe('Checksums Mocks', () => {
     
     // Mock prime registry for testing
     const mockPrimeRegistry = {
-      getPrime: function(idx) { return BigInt(idx * 2 + 1); }, // Maps 0->1, 1->3, 2->5, etc.
-      getIndex: function(prime) { return Number((prime - BigInt(1)) / BigInt(2)); }, // Inverse of above
-      factor: function(x) { return [{ prime: BigInt(2), exponent: 1 }]; }
+      getPrime: function(idx: number) { return BigInt(idx * 2 + 1); }, // Maps 0->1, 1->3, 2->5, etc.
+      getIndex: function(prime: bigint) { return Number((prime - BigInt(1)) / BigInt(2)); }, // Inverse of above
+      factor: function(x: bigint) { return [{ prime: BigInt(2), exponent: 1 }]; }
     };
     
     // Test some key operations with their defaults
@@ -105,9 +105,9 @@ describe('Checksums Mocks', () => {
     
     // Mock prime registry for testing
     const mockPrimeRegistry = {
-      getPrime: function(idx) { return BigInt(idx * 2 + 1); },
-      getIndex: function(prime) { return Number((prime - BigInt(1)) / BigInt(2)); },
-      factor: function(x) { return [{ prime: BigInt(2), exponent: 1 }]; }
+      getPrime: function(idx: number) { return BigInt(idx * 2 + 1); },
+      getIndex: function(prime: bigint) { return Number((prime - BigInt(1)) / BigInt(2)); },
+      factor: function(x: bigint) { return [{ prime: BigInt(2), exponent: 1 }]; }
     };
     
     const factors = [

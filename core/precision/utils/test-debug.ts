@@ -9,19 +9,19 @@ import { toByteArray, fromByteArray } from './index';
 
 // Test with various values
 const testValues = [
-  0n,
-  1n,
-  255n,
-  256n,
-  65535n,
-  65536n,
-  16777215n,
-  16777216n,
-  -1n,
-  -255n,
-  -256n,
-  -65535n,
-  -65536n
+  BigInt(0),
+  BigInt(1),
+  BigInt(255),
+  BigInt(256),
+  BigInt(65535),
+  BigInt(65536),
+  BigInt(16777215),
+  BigInt(16777216),
+  -BigInt(1),
+  -BigInt(255),
+  -BigInt(256),
+  -BigInt(65535),
+  -BigInt(65536)
 ];
 
 for (const value of testValues) {

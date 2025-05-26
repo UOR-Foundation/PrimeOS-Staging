@@ -54,14 +54,14 @@ describe('Modular Arithmetic Mocks', () => {
     // Test some key operations with their defaults
     expect(mockModular.mod(10, 3)).toBe(1);
     expect(mockModular.mod(-5, 3)).toBe(1); // Python compatible
-    expect(mockModular.modPow(2n, 10n, 1000n)).toBe(24n);
-    expect(mockModular.gcd(48n, 18n)).toBe(6n);
-    expect(mockModular.lcm(4n, 6n)).toBe(12n);
+    expect(mockModular.modPow(BigInt(2), BigInt(10), BigInt(1000))).toBe(BigInt(24));
+    expect(mockModular.gcd(BigInt(48), BigInt(18))).toBe(BigInt(6));
+    expect(mockModular.lcm(BigInt(4), BigInt(6))).toBe(BigInt(12));
     
     // Test extended GCD
-    const [g, x, y] = mockModular.extendedGcd(35n, 15n);
-    expect(g).toBe(5n);
-    expect(35n * x + 15n * y).toBe(5n);
+    const [g, x, y] = mockModular.extendedGcd(BigInt(35), BigInt(15));
+    expect(g).toBe(BigInt(5));
+    expect(BigInt(35) * x + BigInt(15) * y).toBe(BigInt(5));
   });
   
   it('processes operations through the ModelInterface', async () => {
@@ -81,7 +81,7 @@ describe('Modular Arithmetic Mocks', () => {
       params: [2, 10, 1000]
     });
     
-    expect(powResult).toBe(24n);
+    expect(powResult).toBe(BigInt(24));
     
     // Test clear cache through process
     await mockModular.process({

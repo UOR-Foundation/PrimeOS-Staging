@@ -76,7 +76,7 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       let bBig = BigInt(b);
       
       // Handle negative modulus by taking absolute value
-      if (bBig < 0n) {
+      if (bBig < BigInt(0)) {
         bBig = -bBig;
       }
       
@@ -92,20 +92,20 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       const expBig = BigInt(exponent);
       const modBig = BigInt(modulus);
       
-      if (modBig === 1n) return 0n;
-      if (expBig === 0n) return 1n;
-      if (baseBig === 0n) return 0n;
+      if (modBig === BigInt(1)) return BigInt(0);
+      if (expBig === BigInt(0)) return BigInt(1);
+      if (baseBig === BigInt(0)) return BigInt(0);
       
       // For mock purposes, use a simplified algorithm
-      let result = 1n;
+      let result = BigInt(1);
       let b = baseBig % modBig;
       let e = expBig;
       
-      while (e > 0n) {
-        if (e % 2n === 1n) {
+      while (e > BigInt(0)) {
+        if (e % BigInt(2) === BigInt(1)) {
           result = (result * b) % modBig;
         }
-        e >>= 1n;
+        e >>= BigInt(1);
         b = (b * b) % modBig;
       }
       
@@ -120,8 +120,8 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       const mBig = BigInt(m);
       
       // For mock purposes, use a simplified approach
-      for (let i = 1n; i < mBig; i++) {
-        if ((aBig * i) % mBig === 1n) {
+      for (let i = BigInt(1); i < mBig; i++) {
+        if ((aBig * i) % mBig === BigInt(1)) {
           state.operationCount.success++;
           return i;
         }
@@ -142,7 +142,7 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       
       // Ensure Python-compatible modulo behavior for negative results
       let result = (aBig * bBig) % mBig;
-      if (result < 0n) {
+      if (result < BigInt(0)) {
         result = (result + mBig) % mBig;
       }
       return result;
@@ -153,10 +153,10 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       state.operationCount.success++;
       
       // Simple mock implementation
-      let aBig = a < 0n ? -a : a;
-      let bBig = b < 0n ? -b : b;
+      let aBig = a < BigInt(0) ? -a : a;
+      let bBig = b < BigInt(0) ? -b : b;
       
-      while (bBig !== 0n) {
+      while (bBig !== BigInt(0)) {
         const temp = bBig;
         bBig = aBig % bBig;
         aBig = temp;
@@ -170,16 +170,16 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       state.operationCount.success++;
       
       // Simple mock implementation
-      if (a === 0n || b === 0n) return 0n;
+      if (a === BigInt(0) || b === BigInt(0)) return BigInt(0);
       
       // Calculate GCD using the gcd function
-      const aBig = a < 0n ? -a : a;
-      const bBig = b < 0n ? -b : b;
+      const aBig = a < BigInt(0) ? -a : a;
+      const bBig = b < BigInt(0) ? -b : b;
       
       // Use a simple Euclidean algorithm for GCD
       let x = aBig;
       let y = bBig;
-      while (y !== 0n) {
+      while (y !== BigInt(0)) {
         const temp = y;
         y = x % y;
         x = temp;
@@ -195,14 +195,14 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       state.operationCount.success++;
       
       // Simple mock implementation
-      if (b === 0n) {
-        return [a, 1n, 0n];
+      if (b === BigInt(0)) {
+        return [a, BigInt(1), BigInt(0)];
       }
       
       // Recursive implementation of extended Euclidean algorithm
       const recursiveGcd = (a: bigint, b: bigint): [bigint, bigint, bigint] => {
-        if (b === 0n) {
-          return [a, 1n, 0n];
+        if (b === BigInt(0)) {
+          return [a, BigInt(1), BigInt(0)];
         }
         
         const [gcd, x1, y1] = recursiveGcd(b, a % b);
@@ -344,10 +344,10 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       state.operationCount.success++;
       
       // Simple mock implementation - just use regular gcd
-      let aBig = a < 0n ? -a : a;
-      let bBig = b < 0n ? -b : b;
+      let aBig = a < BigInt(0) ? -a : a;
+      let bBig = b < BigInt(0) ? -b : b;
       
-      while (bBig !== 0n) {
+      while (bBig !== BigInt(0)) {
         const temp = bBig;
         bBig = aBig % bBig;
         aBig = temp;
@@ -365,19 +365,19 @@ export function createMockModularOperations(options: ModularOptions = {}): Modul
       const expBig = BigInt(exponent);
       const modBig = BigInt(modulus);
       
-      if (modBig === 1n) return 0n;
-      if (expBig === 0n) return 1n;
-      if (baseBig === 0n) return 0n;
+      if (modBig === BigInt(1)) return BigInt(0);
+      if (expBig === BigInt(0)) return BigInt(1);
+      if (baseBig === BigInt(0)) return BigInt(0);
       
-      let result = 1n;
+      let result = BigInt(1);
       let b = baseBig % modBig;
       let e = expBig;
       
-      while (e > 0n) {
-        if (e % 2n === 1n) {
+      while (e > BigInt(0)) {
+        if (e % BigInt(2) === BigInt(1)) {
           result = (result * b) % modBig;
         }
-        e >>= 1n;
+        e >>= BigInt(1);
         b = (b * b) % modBig;
       }
       

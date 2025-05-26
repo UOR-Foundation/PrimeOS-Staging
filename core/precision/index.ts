@@ -18,6 +18,12 @@ export {
   sign,
   abs,
   isPowerOfTwo,
+  integerSqrt,
+  ceilDiv,
+  floorDiv,
+  countSetBits,
+  leadingZeros,
+  trailingZeros,
   // Class and factory
   MathUtils,
   createMathUtils
@@ -47,7 +53,11 @@ export {
   // Core modular operations
   mod,
   modPow,
-  modInverse
+  modInverse,
+  modMul,
+  gcd,
+  lcm,
+  extendedGcd
 } from './modular';
 
 // Import and re-export from the checksums module
@@ -58,7 +68,8 @@ export {
   calculateChecksum,
   extractFactorsAndChecksum,
   attachChecksum,
-  calculateBatchChecksum
+  calculateBatchChecksum,
+  calculateXorSum
 } from './checksums';
 
 // Import and re-export from the verification module
@@ -83,6 +94,9 @@ export {
 // Import and re-export common types
 export * from './types';
 
+// Import cache registry
+import { cacheRegistry, registerCache, clearAllRegisteredCaches } from './cache-registry';
+
 /**
  * Create a unified math utilities object that combines all functionality
  */
@@ -99,9 +113,13 @@ export const MathUtilities = {
   mod: modularModule.mod,
   modPow: modularModule.modPow,
   modInverse: modularModule.modInverse,
+  gcd: modularModule.gcd,
+  lcm: modularModule.lcm,
+  extendedGcd: modularModule.extendedGcd,
   
   // Checksum operations
   calculateChecksum: checksumsModule.calculateChecksum,
+  attachChecksum: checksumsModule.attachChecksum,
   verifyChecksum: (value: bigint, primeRegistry: any) => {
     try {
       verificationModule.verifyValue(value, primeRegistry);
@@ -132,6 +150,28 @@ export const MathUtilities = {
   abs: utilsModule.abs,
   isPowerOfTwo: utilsModule.isPowerOfTwo
 };
+
+/**
+ * Interface for a precision module instance
+ */
+export interface PrecisionInstance {
+  // Module references
+  bigint: typeof bigintModule;
+  modular: typeof modularModule;
+  checksums: typeof checksumsModule;
+  verification: typeof verificationModule;
+  utils: typeof utilsModule;
+  
+  // Utilities
+  MathUtilities: typeof MathUtilities;
+  
+  // Cache if created
+  cache?: any;
+  sharedCache?: any;
+  
+  // Configuration
+  config: PrecisionConfiguration;
+}
 
 /**
  * PrecisionConfiguration contains all options for the precision module
@@ -171,6 +211,36 @@ export interface PrecisionConfiguration {
    * Time-to-live for cache entries (ms)
    */
   cacheTTL?: number;
+  
+  /**
+   * Use optimized implementations when available
+   */
+  useOptimized?: boolean;
+  
+  /**
+   * Enable strict mode for validation
+   */
+  strict?: boolean;
+  
+  /**
+   * Verify values on every operation
+   */
+  verifyOnOperation?: boolean;
+  
+  /**
+   * Fail fast on errors
+   */
+  failFast?: boolean;
+  
+  /**
+   * Enable retry logic
+   */
+  enableRetry?: boolean;
+  
+  /**
+   * Retry options
+   */
+  retryOptions?: any;
 }
 
 /**
@@ -216,6 +286,7 @@ export function createPrecision(config: PrecisionConfiguration = {}) {
     
     // Include cache if created
     cache,
+    sharedCache: cache,
     
     // Provide module configuration
     config
@@ -233,3 +304,67 @@ export const precision = createPrecision();
 export function getVersion(): string {
   return "1.0.0";
 }
+
+// Export cache creation function
+export function createCache(options?: any) {
+  return verificationModule.createCacheFactory().createCache(options || {});
+}
+
+// Export memoization functions
+export function memoize<T extends (...args: any[]) => any>(fn: T, options?: any) {
+  return verificationModule.createCacheFactory().memoize(fn, options);
+}
+
+export function memoizeAsync<T extends (...args: any[]) => Promise<any>>(fn: T, options?: any) {
+  return verificationModule.createCacheFactory().memoizeAsync(fn, options);
+}
+
+// Export precision model creation function
+export { createAndInitializePrecisionModel as createAndInitializePrecision } from './precision-model';
+
+// Export clearAllCaches function
+export async function clearAllCaches(): Promise<void> {
+  // Clear all registered caches
+  await clearAllRegisteredCaches();
+  
+  // Also clear module-specific caches that might not be registered
+  try {
+    // Clear modular module cache (it has clearCache)
+    if ('clearCache' in modularModule && typeof modularModule.clearCache === 'function') {
+      modularModule.clearCache();
+    }
+    
+    // Clear bigint module cache if it has clearCache method
+    const bigintAny = bigintModule as any;
+    if (bigintAny.clearCache && typeof bigintAny.clearCache === 'function') {
+      bigintAny.clearCache();
+    }
+    
+    // Clear checksums module cache if it has clearCache method
+    const checksumsAny = checksumsModule as any;
+    if (checksumsAny.clearCache && typeof checksumsAny.clearCache === 'function') {
+      checksumsAny.clearCache();
+    }
+    
+    // Clear verification module cache (it has clearCache)
+    if ('clearCache' in verificationModule && typeof verificationModule.clearCache === 'function') {
+      verificationModule.clearCache();
+    }
+    
+    // Clear utils module caches if it has clearAllCaches method
+    const utilsAny = utilsModule as any;
+    if (utilsAny.clearAllCaches && typeof utilsAny.clearAllCaches === 'function') {
+      utilsAny.clearAllCaches();
+    }
+    
+    // Clear the default precision instance cache
+    if (precision.cache && typeof precision.cache.clear === 'function') {
+      precision.cache.clear();
+    }
+  } catch (error) {
+    console.error('Error clearing module caches:', error);
+  }
+}
+
+// Additional type exports
+export type { PrecisionState } from './precision-model';

@@ -25,15 +25,15 @@ export function createBitCountingFunctions(options: UtilityOptions = {}) {
     const n = typeof value === 'number' ? BigInt(Math.floor(value)) : value;
     
     // Handle negative numbers by taking absolute value
-    const absValue = n < 0n ? -n : n;
+    const absValue = n < BigInt(0) ? -n : n;
     
     // Count bits
     let count = 0;
     let temp = absValue;
     
-    while (temp > 0n) {
-      if (temp & 1n) count++;
-      temp >>= 1n;
+    while (temp > BigInt(0)) {
+      if (temp & BigInt(1)) count++;
+      temp >>= BigInt(1);
     }
     
     return count;
@@ -48,20 +48,20 @@ export function createBitCountingFunctions(options: UtilityOptions = {}) {
     const n = typeof value === 'number' ? BigInt(Math.floor(value)) : value;
     
     // Handle negative or zero inputs
-    if (n <= 0n) {
-      if (config.strict && n < 0n) {
+    if (n <= BigInt(0)) {
+      if (config.strict && n < BigInt(0)) {
         throw createNegativeInputError('leadingZeros', n);
       }
-      return n === 0n ? 64 : 0; // Assume 64-bit representation for zero
+      return n === BigInt(0) ? 64 : 0; // Assume 64-bit representation for zero
     }
     
     // Calculate bit length
     let bitLength = 0;
     let temp = n;
     
-    while (temp > 0n) {
+    while (temp > BigInt(0)) {
       bitLength++;
-      temp >>= 1n;
+      temp >>= BigInt(1);
     }
     
     // Leading zeros = 64 - bit length (assuming 64-bit representation)
@@ -76,15 +76,15 @@ export function createBitCountingFunctions(options: UtilityOptions = {}) {
     const n = typeof value === 'number' ? BigInt(Math.floor(value)) : value;
     
     // Handle zero input
-    if (n === 0n) return 64; // Assume 64-bit representation
+    if (n === BigInt(0)) return 64; // Assume 64-bit representation
     
     // Count trailing zeros
     let count = 0;
     let temp = n;
     
-    while ((temp & 1n) === 0n) {
+    while ((temp & BigInt(1)) === BigInt(0)) {
       count++;
-      temp >>= 1n;
+      temp >>= BigInt(1);
     }
     
     return count;

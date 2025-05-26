@@ -23,38 +23,38 @@ describe('Checksums Module', () => {
   // Mock prime registry for testing
   const mockPrimeRegistry = {
     getPrime: (idx: number) => BigInt(idx * 2 + 1), // Maps 0->1, 1->3, 2->5, etc.
-    getIndex: (prime: bigint) => Number((prime - 1n) / 2n), // Inverse of above
+    getIndex: (prime: bigint) => Number((prime - BigInt(1)) / BigInt(2)), // Inverse of above
     factor: (x: bigint): Factor[] => {
       // Handle known test values directly
-      if (x === 42n) {
+      if (x === BigInt(42)) {
         return [
-          { prime: 2n, exponent: 1 },
-          { prime: 3n, exponent: 1 },
-          { prime: 7n, exponent: 1 }
+          { prime: BigInt(2), exponent: 1 },
+          { prime: BigInt(3), exponent: 1 },
+          { prime: BigInt(7), exponent: 1 }
         ];
-      } else if (x === 60n) {
+      } else if (x === BigInt(60)) {
         return [
-          { prime: 2n, exponent: 2 },
-          { prime: 3n, exponent: 1 },
-          { prime: 5n, exponent: 1 }
+          { prime: BigInt(2), exponent: 2 },
+          { prime: BigInt(3), exponent: 1 },
+          { prime: BigInt(5), exponent: 1 }
         ];
-      } else if (x === 1000n) {
+      } else if (x === BigInt(1000)) {
         return [
-          { prime: 2n, exponent: 3 },
-          { prime: 5n, exponent: 3 }
+          { prime: BigInt(2), exponent: 3 },
+          { prime: BigInt(5), exponent: 3 }
         ];
-      } else if (x === 28n) {
+      } else if (x === BigInt(28)) {
         return [
-          { prime: 2n, exponent: 2 },
-          { prime: 7n, exponent: 1 }
+          { prime: BigInt(2), exponent: 2 },
+          { prime: BigInt(7), exponent: 1 }
         ];
       } else {
         // Enhanced handling for checksummed values
         // Check if this is a checksummed version of a known value
-        const knownValues = [42n, 60n, 1000n, 28n];
+        const knownValues = [BigInt(42), BigInt(60), BigInt(1000), BigInt(28)];
         
         for (const knownValue of knownValues) {
-          if (x % knownValue === 0n) {
+          if (x % knownValue === BigInt(0)) {
             const checksumFactor = x / knownValue;
             
             // Get the base factors for the known value
@@ -104,9 +104,9 @@ describe('Checksums Module', () => {
   describe('Checksum Calculation', () => {
     test('calculateXorSum generates XOR sum from factors', () => {
       const factors: Factor[] = [
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ];
       
       // Create a fresh instance for testing
@@ -125,13 +125,13 @@ describe('Checksums Module', () => {
       
       // Calculate with different factors
       const differentFactors: Factor[] = [
-        { prime: 2n, exponent: 2 },
-        { prime: 3n, exponent: 1 }
+        { prime: BigInt(2), exponent: 2 },
+        { prime: BigInt(3), exponent: 1 }
       ];
       const differentResult = cs.calculateXorSum(differentFactors);
       
       // Different factors should yield a different XOR sum
-      expect(differentResult).not.toBe(result);
+      expect(differentResult !== result).toBe(true);
       
       // Test with registry for more accurate prime indices
       const withRegistryResult = cs.calculateXorSum(factors, mockPrimeRegistry);
@@ -140,9 +140,9 @@ describe('Checksums Module', () => {
     
     test('calculateChecksum returns a prime for checksum', () => {
       const factors: Factor[] = [
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ];
       
       // Execute with the exported function
@@ -153,18 +153,18 @@ describe('Checksums Module', () => {
       
       // Different factors should yield different checksums
       const otherFactors: Factor[] = [
-        { prime: 2n, exponent: 2 },
-        { prime: 3n, exponent: 1 }
+        { prime: BigInt(2), exponent: 2 },
+        { prime: BigInt(3), exponent: 1 }
       ];
       const otherResult = calculateChecksum(otherFactors, mockPrimeRegistry);
-      expect(otherResult).not.toBe(result);
+      expect(otherResult !== result).toBe(true);
     });
     
     test('calculateChecksum caching works', () => {
       const factors: Factor[] = [
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ];
       
       // Create a new implementation with caching enabled
@@ -183,16 +183,16 @@ describe('Checksums Module', () => {
       expect(result2).toBe(result1);
       
       // Verify calculateXorSum wasn't called again due to cache
-      expect(spy).not.toHaveBeenCalled();
+      expect(spy.mock.calls.length).toBe(0);
       
       spy.mockRestore();
     });
     
     test('calculateChecksum disables caching when specified', () => {
       const factors: Factor[] = [
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ];
       
       // Create a new implementation with caching disabled
@@ -211,7 +211,7 @@ describe('Checksums Module', () => {
       expect(result2).toBe(result1);
       
       // Verify calculateXorSum was called again since caching is disabled
-      expect(spy).toHaveBeenCalled();
+      expect(spy.mock.calls.length).toBeGreaterThan(0);
       
       spy.mockRestore();
     });
@@ -227,21 +227,21 @@ describe('Checksums Module', () => {
   
   describe('Checksum Attachment and Extraction', () => {
     test('attachChecksum attaches a checksum to a value', () => {
-      const value = 42n;
+      const value = BigInt(42);
       const factors = mockPrimeRegistry.factor(value);
       
       // Calculate checksum and attach it
       const attachedValue = attachChecksum(value, factors, mockPrimeRegistry);
       
       // Verify the attached value is different from the original
-      expect(attachedValue).not.toBe(value);
+      expect(attachedValue !== value).toBe(true);
       
       // Check it's divisible by the original value
-      expect(attachedValue % value).toBe(0n);
+      expect(attachedValue % value).toBe(BigInt(0));
     });
     
     test('extractFactorsAndChecksum extracts and verifies checksums', () => {
-      const value = 42n;
+      const value = BigInt(42);
       const factors = mockPrimeRegistry.factor(value);
       
       // Calculate checksum and attach it
@@ -259,14 +259,14 @@ describe('Checksums Module', () => {
     });
     
     test('extractFactorsAndChecksum throws on invalid checksum', () => {
-      const value = 42n;
+      const value = BigInt(42);
       const factors = mockPrimeRegistry.factor(value);
       
       // Calculate checksum and attach it
       const attachedValue = attachChecksum(value, factors, mockPrimeRegistry);
       
       // Tamper with the value
-      const tamperedValue = attachedValue + 1n;
+      const tamperedValue = attachedValue + BigInt(1);
       
       // Extraction should throw an error
       expect(() => {
@@ -276,7 +276,7 @@ describe('Checksums Module', () => {
     
     test('round-trip checksum operation works', () => {
       // Test with a single value for simplicity
-      const value = 42n;
+      const value = BigInt(42);
       const factors = mockPrimeRegistry.factor(value);
       
       // Attach checksum
@@ -302,7 +302,7 @@ describe('Checksums Module', () => {
     });
     
     test('checksumPower affects the checksum size', () => {
-      const value = 42n;
+      const value = BigInt(42);
       const factors = mockPrimeRegistry.factor(value);
       
       // Create checksums with different powers
@@ -314,13 +314,13 @@ describe('Checksums Module', () => {
       const attached2 = cs2.attachChecksum(value, factors, mockPrimeRegistry);
       
       // The higher power should create a larger checksum
-      expect(attached2).toBeGreaterThan(attached1);
+      expect(attached2 > attached1).toBe(true);
     });
   });
   
   describe('Batch and Streaming Operations', () => {
     test('calculateBatchChecksum creates a single checksum for multiple values', () => {
-      const values = [42n, 60n, 1000n];
+      const values = [BigInt(42), BigInt(60), BigInt(1000)];
       
       // Create checksummed values
       const checksummed = values.map(value => {
@@ -336,7 +336,7 @@ describe('Checksums Module', () => {
     });
     
     test('batch checksum with tampered values', () => {
-      const values = [42n, 60n, 1000n];
+      const values = [BigInt(42), BigInt(60), BigInt(1000)];
       
       // Create checksummed values
       const checksummed = values.map(value => {
@@ -346,18 +346,18 @@ describe('Checksums Module', () => {
       
       // Tamper with one value
       const tampered = [...checksummed];
-      tampered[1] = tampered[1] + 1n;
+      tampered[1] = tampered[1] + BigInt(1);
       
       // Calculate batch checksums
       const originalChecksum = calculateBatchChecksum(checksummed, mockPrimeRegistry);
       const tamperedChecksum = calculateBatchChecksum(tampered, mockPrimeRegistry);
       
       // Should be different when a value is tampered with
-      expect(tamperedChecksum).not.toBe(originalChecksum);
+      expect(tamperedChecksum !== originalChecksum).toBe(true);
     });
     
     test('XorHash state can be updated incrementally', () => {
-      const values = [42n, 60n, 1000n];
+      const values = [BigInt(42), BigInt(60), BigInt(1000)];
       
       // Create checksummed values
       const checksummed = values.map(value => {
@@ -383,7 +383,7 @@ describe('Checksums Module', () => {
     });
     
     test('Incremental XorHash ignores invalid values', () => {
-      const values = [42n, 60n, 1000n];
+      const values = [BigInt(42), BigInt(60), BigInt(1000)];
       
       // Create checksummed values
       const checksummed = values.map(value => {
@@ -392,7 +392,7 @@ describe('Checksums Module', () => {
       });
       
       // Add an invalid value
-      const withInvalid = [...checksummed, 999n]; // 999n has no checksum
+      const withInvalid = [...checksummed, BigInt(999)]; // BigInt(999) has no checksum
       
       // Incremental approach
       const cs = createChecksums();
@@ -415,9 +415,9 @@ describe('Checksums Module', () => {
   describe('Cache Management', () => {
     test('clearCache empties the checksum cache', () => {
       const factors: Factor[] = [
-        { prime: 2n, exponent: 1 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
+        { prime: BigInt(2), exponent: 1 },
+        { prime: BigInt(3), exponent: 1 },
+        { prime: BigInt(5), exponent: 1 }
       ];
       
       const cs = createChecksums({ enableCache: true });
@@ -430,14 +430,14 @@ describe('Checksums Module', () => {
       
       // Second calculation should use cache
       cs.calculateChecksum(factors, mockPrimeRegistry);
-      expect(spy).not.toHaveBeenCalled();
+      expect(spy.mock.calls.length).toBe(0);
       
       // Clear the cache
       cs.clearCache();
       
       // Third calculation should recompute
       cs.calculateChecksum(factors, mockPrimeRegistry);
-      expect(spy).toHaveBeenCalled();
+      expect(spy.mock.calls.length).toBeGreaterThan(0);
       
       spy.mockRestore();
     });

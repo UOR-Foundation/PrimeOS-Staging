@@ -86,7 +86,7 @@ export function modPow(
   let expBig = BigInt(exponent);
   const modBig = BigInt(modulus);
   
-  if (modBig === 0n) {
+  if (modBig === BigInt(0)) {
     const error = createDivisionByZeroError('modular exponentiation');
     if (opts.debug && opts.logger) {
       opts.logger.error('Error in modPow:', error).catch(() => {});
@@ -94,17 +94,17 @@ export function modPow(
     throw error;
   }
   
-  if (modBig === 1n) {
+  if (modBig === BigInt(1)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`modPow result: 0 (modulus is 1)`).catch(() => {});
     }
-    return 0n;
+    return BigInt(0);
   }
   
   // Check operation size in strict mode
   if (opts.strict) {
-    const baseBits = bitLength(baseBig < 0n ? -baseBig : baseBig);
-    const expBits = bitLength(expBig < 0n ? -expBig : expBig);
+    const baseBits = bitLength(baseBig < BigInt(0) ? -baseBig : baseBig);
+    const expBits = bitLength(expBig < BigInt(0) ? -expBig : expBig);
     const modBits = bitLength(modBig);
     
     if (Math.max(baseBits, modBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS || 
@@ -122,7 +122,7 @@ export function modPow(
   }
   
   // Handle negative exponent using modular inverse
-  if (expBig < 0n) {
+  if (expBig < BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`Handling negative exponent ${expBig}, computing modular inverse of ${baseBig}`).catch(() => {});
     }
@@ -140,18 +140,18 @@ export function modPow(
   baseBig = mod(baseBig, modBig);
   
   // Quick checks
-  if (baseBig === 0n) {
+  if (baseBig === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`modPow result: 0 (base is 0)`).catch(() => {});
     }
-    return 0n;
+    return BigInt(0);
   }
   
-  if (expBig === 0n) {
+  if (expBig === BigInt(0)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`modPow result: 1 (exponent is 0)`).catch(() => {});
     }
-    return 1n;
+    return BigInt(1);
   }
   
   if (opts.debug && opts.logger) {
@@ -159,13 +159,13 @@ export function modPow(
   }
   
   // Fast modular exponentiation using square-and-multiply
-  let result = 1n;
+  let result = BigInt(1);
   
-  while (expBig > 0n) {
-    if (expBig % 2n === 1n) {
+  while (expBig > BigInt(0)) {
+    if (expBig % BigInt(2) === BigInt(1)) {
       result = modMul(result, baseBig, modBig);
     }
-    expBig >>= 1n;
+    expBig >>= BigInt(1);
     baseBig = modMul(baseBig, baseBig, modBig);
   }
   
@@ -198,7 +198,7 @@ export function modInverse(
   const mBig = BigInt(m);
   
   // Check for zero
-  if (aBig === 0n || mBig === 0n) {
+  if (aBig === BigInt(0) || mBig === BigInt(0)) {
     const error = createDivisionByZeroError('modular inverse');
     if (opts.debug && opts.logger) {
       opts.logger.error('Error in modInverse:', error).catch(() => {});
@@ -208,8 +208,8 @@ export function modInverse(
   
   // Check operation size in strict mode
   if (opts.strict) {
-    const aBits = bitLength(aBig < 0n ? -aBig : aBig);
-    const mBits = bitLength(mBig < 0n ? -mBig : mBig);
+    const aBits = bitLength(aBig < BigInt(0) ? -aBig : aBig);
+    const mBits = bitLength(mBig < BigInt(0) ? -mBig : mBig);
     
     if (Math.max(aBits, mBits) > MODULAR_CONSTANTS.MAX_SUPPORTED_BITS) {
       const error = createBitSizeError(
@@ -228,7 +228,7 @@ export function modInverse(
   const [g, x, _] = extendedGcd(aBig, mBig);
   
   // Check if inverse exists (gcd must be 1 for a to be invertible)
-  if (g !== 1n) {
+  if (g !== BigInt(1)) {
     if (opts.debug && opts.logger) {
       opts.logger.debug(`No modular inverse for ${aBig} mod ${mBig} (gcd = ${g})`).catch(() => {});
     }
@@ -271,12 +271,12 @@ export function slidingWindowModPow(
   const modBig = BigInt(modulus);
   
   // Handle special cases
-  if (modBig === 1n) return 0n;
-  if (expBig === 0n) return 1n;
-  if (baseBig === 0n) return 0n;
+  if (modBig === BigInt(1)) return BigInt(0);
+  if (expBig === BigInt(0)) return BigInt(1);
+  if (baseBig === BigInt(0)) return BigInt(0);
   
   // Handle negative exponent
-  if (expBig < 0n) {
+  if (expBig < BigInt(0)) {
     baseBig = modInverse(baseBig, modBig, opts);
     expBig = -expBig;
   }
@@ -286,7 +286,7 @@ export function slidingWindowModPow(
   
   // Precompute powers of base
   const precomputed = new Map<bigint, bigint>();
-  precomputed.set(1n, baseBig);
+  precomputed.set(BigInt(1), baseBig);
   
   const baseSquared = modMul(baseBig, baseBig, modBig);
   for (let i = 1; i < (1 << (windowSize - 1)); i++) {
@@ -298,7 +298,7 @@ export function slidingWindowModPow(
   const binaryExp = expBig.toString(2);
   
   // Sliding window algorithm
-  let result = 1n;
+  let result = BigInt(1);
   let i = 0;
   
   while (i < binaryExp.length) {
