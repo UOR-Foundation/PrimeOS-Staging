@@ -19,9 +19,20 @@ module.exports = {
   testMatch: ['**/*.test.ts', '**/*.spec.ts', '**/test.ts'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
-    '^../../../os/model$': '<rootDir>/../__mocks__/os-model-mock',
-    '^../../../os/logging$': '<rootDir>/../__mocks__/os-logging-mock',
-    '^../cache$': '<rootDir>/../cache/__mocks__'
+    // Map os module imports to their respective mock files
+    '^../../../os/model$': '<rootDir>/__mocks__/os-model-mock',
+    '^../../../os/model/types$': '<rootDir>/__mocks__/os-model-mock',
+    '^../../../os/logging$': '<rootDir>/__mocks__/os-logging-mock',
+    '^../../../os/logging/types$': '<rootDir>/__mocks__/os-logging-mock',
+    
+    // Map cache imports to cache mocks
+    '^../cache$': '<rootDir>/../cache/__mocks__',
+    '^../cache/index$': '<rootDir>/../cache/__mocks__',
+    '^../cache/types$': '<rootDir>/../cache/__mocks__',
+    
+    // Additional patterns for nested imports
+    '^../../../../os/model$': '<rootDir>/__mocks__/os-model-mock',
+    '^../../../../os/logging$': '<rootDir>/__mocks__/os-logging-mock'
   },
   collectCoverageFrom: [
     '**/*.ts',

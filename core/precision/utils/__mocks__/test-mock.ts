@@ -150,7 +150,18 @@ export function createMockMathUtils(options: MathUtilsModelOptions = {}): MockMa
     
     lcm: jest.fn().mockImplementation((a, b) => {
       metrics.operationCount++;
-      return (a * b) / mockUtils.gcd(a, b);
+      const gcdResult = mockUtils.gcd(a, b);
+      
+      // Ensure type consistency for division
+      if (typeof a === 'bigint' || typeof b === 'bigint') {
+        const bigA = typeof a === 'bigint' ? a : BigInt(a);
+        const bigB = typeof b === 'bigint' ? b : BigInt(b);
+        const bigGcd = typeof gcdResult === 'bigint' ? gcdResult : BigInt(gcdResult);
+        return (bigA * bigB) / bigGcd;
+      } else {
+        const numGcd = typeof gcdResult === 'number' ? gcdResult : Number(gcdResult);
+        return (a * b) / numGcd;
+      }
     }),
     
     extendedGcd: jest.fn().mockImplementation((a, b) => {

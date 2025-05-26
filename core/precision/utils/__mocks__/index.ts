@@ -6,8 +6,8 @@
  */
 
 // Re-export model and logging mocks
-export * from '../__mocks__/os-model-mock';
-export * from '../__mocks__/os-logging-mock';
+export * from '../../__mocks__/os-model-mock';
+export * from '../../__mocks__/os-logging-mock';
 
 // Import cache mocks for integration
 import { createMockCache } from '../../cache/__mocks__';
@@ -18,8 +18,8 @@ import {
   MathUtilsModelOptions, 
   MathUtilsModelState 
 } from '../types';
-import { ModelResult, ModelLifecycleState } from '../__mocks__/os-model-mock';
-import { createLogging } from '../__mocks__/os-logging-mock';
+import { ModelResult, ModelLifecycleState } from '../../__mocks__/os-model-mock';
+import { createLogging } from '../../__mocks__/os-logging-mock';
 
 /**
  * Create a mock MathUtils implementation that integrates with cache mocks
@@ -71,9 +71,16 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
   return {
     // Math utility interface methods with proper cache integration
     bitLength: jest.fn().mockImplementation((value: bigint | number) => {
-      const result = typeof value === 'bigint' 
-        ? value.toString(2).length
-        : Math.floor(Math.log2(Math.abs(value))) + 1;
+      if (value === 0 || value === 0n) return 1;
+      
+      let result: number;
+      if (typeof value === 'bigint') {
+        const absValue = value < 0n ? -value : value;
+        result = absValue.toString(2).length;
+      } else {
+        const absValue = Math.abs(value);
+        result = absValue === 0 ? 1 : Math.floor(Math.log2(absValue)) + 1;
+      }
       
       // Simulate cache behavior if enabled
       if (mockCache && state.config.enableCache) {
@@ -86,8 +93,10 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
         }
         
         // Update cache size from mock cache metrics
-        const metrics = mockCache.getMetrics();
-        state.cache!.bitLengthCacheSize = metrics.currentSize;
+        const metrics = mockCache.getMetrics?.();
+        if (metrics) {
+          state.cache!.bitLengthCacheSize = metrics.currentSize;
+        }
       }
       
       return result;
@@ -99,15 +108,23 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
     
     toByteArray: jest.fn().mockImplementation((value: bigint | number) => {
       const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
-      const hex = bigintValue.toString(16);
-      const bytes = new Uint8Array(Math.ceil(hex.length / 2));
+      let hex = bigintValue.toString(16);
+      
+      // Ensure even length for proper byte conversion
+      if (hex.length % 2 !== 0) {
+        hex = '0' + hex;
+      }
+      
+      const bytes = new Uint8Array(hex.length / 2);
       for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+        bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
       }
       return bytes;
     }),
     
     fromByteArray: jest.fn().mockImplementation((bytes: Uint8Array) => {
+      if (bytes.length === 0) return 0n;
+      
       let hex = '';
       for (const byte of bytes) {
         hex += byte.toString(16).padStart(2, '0');
@@ -195,28 +212,32 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
     ceilDiv: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
       const bigA = typeof a === 'bigint' ? a : BigInt(a);
       const bigB = typeof b === 'bigint' ? b : BigInt(b);
-      const result = (bigA + bigB - 1n) / bigB;
+      if (bigB === 0n) throw new Error('Division by zero');
       
+      const result = (bigA + bigB - 1n) / bigB;
       return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
     }),
     
     floorDiv: jest.fn().mockImplementation((a: bigint | number, b: bigint | number) => {
       const bigA = typeof a === 'bigint' ? a : BigInt(a);
       const bigB = typeof b === 'bigint' ? b : BigInt(b);
-      const result = bigA / bigB;
+      if (bigB === 0n) throw new Error('Division by zero');
       
+      const result = bigA / bigB;
       return typeof a === 'number' && typeof b === 'number' ? Number(result) : result;
     }),
     
     countSetBits: jest.fn().mockImplementation((value: bigint | number) => {
       const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
-      const binaryStr = bigintValue.toString(2);
+      const absValue = bigintValue < 0n ? -bigintValue : bigintValue;
+      const binaryStr = absValue.toString(2);
       return (binaryStr.match(/1/g) || []).length;
     }),
     
     leadingZeros: jest.fn().mockImplementation((value: bigint | number) => {
       const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
-      const binaryStr = bigintValue.toString(2);
+      const absValue = bigintValue < 0n ? -bigintValue : bigintValue;
+      const binaryStr = absValue.toString(2);
       let count = 0;
       for (const bit of binaryStr) {
         if (bit === '0') count++;
@@ -227,7 +248,8 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
     
     trailingZeros: jest.fn().mockImplementation((value: bigint | number) => {
       const bigintValue = typeof value === 'bigint' ? value : BigInt(value);
-      const binaryStr = bigintValue.toString(2);
+      const absValue = bigintValue < 0n ? -bigintValue : bigintValue;
+      const binaryStr = absValue.toString(2);
       let count = 0;
       for (let i = binaryStr.length - 1; i >= 0; i--) {
         if (binaryStr[i] === '0') count++;
@@ -267,12 +289,14 @@ export function createMathUtils(options: MathUtilsModelOptions = {}): MathUtilsM
     getState() {
       // Update cache metrics from mock cache if available
       if (mockCache && state.config.enableCache) {
-        const cacheMetrics = mockCache.getMetrics();
-        state.cache = {
-          bitLengthCacheSize: cacheMetrics.currentSize,
-          bitLengthCacheHits: cacheMetrics.hitCount,
-          bitLengthCacheMisses: cacheMetrics.missCount
-        };
+        const cacheMetrics = mockCache.getMetrics?.();
+        if (cacheMetrics) {
+          state.cache = {
+            bitLengthCacheSize: cacheMetrics.currentSize,
+            bitLengthCacheHits: cacheMetrics.hitCount,
+            bitLengthCacheMisses: cacheMetrics.missCount
+          };
+        }
       }
       
       return { ...state };

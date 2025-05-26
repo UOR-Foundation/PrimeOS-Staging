@@ -31,10 +31,7 @@ import {
 } from './index';
 import { ModelLifecycleState } from '../../../os/model/types';
 
-// Mock the os/model, os/logging, and cache modules to use our mock implementations
-jest.mock('../../../os/model', () => require('./__mocks__/os-model-mock'));
-jest.mock('../../../os/logging', () => require('./__mocks__/logging'));
-jest.mock('../cache');
+// Note: Mocking is handled by moduleNameMapper in jest.config.js
 
 describe('Utility Functions', () => {
   // New tests for GCD and LCM
