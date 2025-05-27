@@ -454,8 +454,9 @@ export class BigIntImplementation extends BaseModel implements BigIntInterface {
     // Calculate the value from bytes
     const processLength = isNegative ? bytes.length - 1 : bytes.length;
     
-    for (let i = processLength - 1; i >= 0; i--) {
-      result = (result << BigInt(8)) | BigInt(bytes[i]);
+    // Fixed: Process bytes in little-endian order (LSB first)
+    for (let i = 0; i < processLength; i++) {
+      result = result | (BigInt(bytes[i]) << BigInt(i * 8));
     }
     
     return isNegative ? -result : result;

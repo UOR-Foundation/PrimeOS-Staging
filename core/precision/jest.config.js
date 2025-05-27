@@ -17,30 +17,6 @@ module.exports = {
     '<rootDir>/utils/__mocks__',
     '<rootDir>/verification/__mocks__'
   ],
-  moduleNameMapper: {
-    // Map os modules to mocks - comprehensive coverage
-    '^../../../os/model$': '<rootDir>/../../os/model/__mocks__',
-    '^../../../os/logging$': '<rootDir>/../../os/logging/__mocks__',
-    '^../../../os/model/types$': '<rootDir>/../../os/model/__mocks__',
-    '^../../../os/logging/types$': '<rootDir>/../../os/logging/__mocks__',
-    
-    // Additional os module patterns for nested imports
-    '^../../../../os/model$': '<rootDir>/../../os/model/__mocks__',
-    '^../../../../os/logging$': '<rootDir>/../../os/logging/__mocks__',
-    '^../../../../os/model/types$': '<rootDir>/../../os/model/__mocks__',
-    '^../../../../os/logging/types$': '<rootDir>/../../os/logging/__mocks__',
-    
-    // Cache module mappings for utils module
-    '^../cache$': '<rootDir>/cache/__mocks__',
-    '^../cache/index$': '<rootDir>/cache/__mocks__',
-    '^../cache/types$': '<rootDir>/cache/__mocks__',
-    
-    // Internal mock cross-references (this is the key fix!)
-    '^../../__mocks__/os-model-mock$': '<rootDir>/__mocks__/os-model-mock',
-    '^../../__mocks__/os-logging-mock$': '<rootDir>/__mocks__/os-logging-mock',
-    '^../../../__mocks__/os-model-mock$': '<rootDir>/__mocks__/os-model-mock',
-    '^../../../__mocks__/os-logging-mock$': '<rootDir>/__mocks__/os-logging-mock'
-  },
   collectCoverageFrom: [
     '**/*.ts',
     '!**/*.d.ts',
