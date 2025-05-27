@@ -15,6 +15,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "primeos": "^0.1.0"
+    "primeos": "^0.1.0",
+    "@primeos/core-precision": "^1.0.0"
   }
 }

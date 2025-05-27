@@ -6,6 +6,11 @@
  * the first axiom of the UOR kernel: "All representation derives from prime numbers"
  */
 
+import {
+  ModelLifecycleState,
+  ModelState
+} from '../../os/model/types';
+
 /**
  * Configuration options for the prime registry
  */
@@ -34,6 +39,21 @@ export interface PrimeRegistryOptions {
    * Enable logging for debugging
    */
   enableLogs?: boolean;
+  
+  /**
+   * Enable debug mode
+   */
+  debug?: boolean;
+  
+  /**
+   * Module name
+   */
+  name?: string;
+  
+  /**
+   * Module version
+   */
+  version?: string;
 }
 
 /**
@@ -240,3 +260,48 @@ export interface PrimeRegistryInterface {
  * Alias for backwards compatibility - in PrimeOS all registries have streaming support
  */
 export type StreamingPrimeRegistryInterface = PrimeRegistryInterface;
+
+/**
+ * Input types for Prime module processing
+ */
+export type PrimeProcessInput = {
+  operation: 'isPrime' | 'getPrime' | 'getIndex' | 'factor' | 'createPrimeStream' | 
+             'createFactorStream' | 'factorizeStreaming' | 'getVersion' | 'clearCache';
+  params: any[];
+};
+
+/**
+ * Extended state for Prime module
+ */
+export interface PrimeState extends ModelState {
+  /**
+   * Configuration settings
+   */
+  config: {
+    streamingEnabled: boolean;
+    chunkSize: number;
+    enableLogs: boolean;
+    preloadCount: number;
+  };
+  
+  /**
+   * Prime cache statistics
+   */
+  cache: {
+    size: number;
+    hits: number;
+    misses: number;
+    primeCount: number;
+    largestPrime: bigint;
+  };
+  
+  /**
+   * Performance metrics
+   */
+  metrics: {
+    factorizations: number;
+    primalityTests: number;
+    streamOperations: number;
+    averageFactorizationTime: number;
+  };
+}

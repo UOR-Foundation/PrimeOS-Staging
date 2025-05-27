@@ -3,9 +3,17 @@
  * ======================
  * 
  * Utility functions for the prime module implementation.
+ * Uses the precision module for enhanced mathematical operations.
  */
 
 import { Stream, Factor } from './types';
+
+// Import enhanced mathematical functions from the precision module
+import { 
+  mod as precisionMod, 
+  modPow as precisionModPow, 
+  integerSqrt as precisionIntegerSqrt,
+} from '../precision';
 
 /**
  * Create a basic stream from an array of values
@@ -96,69 +104,32 @@ export function createBasicStream<T>(values: T[]): Stream<T> {
 /**
  * Modular arithmetic for BigInt values
  * 
- * Returns a positive value between 0 and |m| - 1, matching
- * Python's modular semantics.
+ * Uses the precision module's enhanced implementation with Python-compatible semantics.
  */
 export function mod(a: bigint, m: bigint): bigint {
-  return ((a % m) + m) % m;
+  return precisionMod(a, m);
 }
 
 /**
  * Modular exponentiation for BigInt values
  * 
- * Efficiently computes (base ** exponent) % modulus
- * without overflowing for large values.
+ * Uses the precision module's optimized implementation with overflow protection.
  */
 export function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
-  if (modulus === 1n) return 0n;
-  if (exponent < 0n) {
-    throw new Error("Negative exponents not supported");
-  }
-  
-  // Handle the base case
-  base = mod(base, modulus);
-  
-  let result = 1n;
-  while (exponent > 0n) {
-    // If the current bit of the exponent is 1, multiply result by base
-    if (exponent & 1n) {
-      result = (result * base) % modulus;
-    }
-    
-    // Square the base for the next bit
-    base = (base * base) % modulus;
-    
-    // Move to the next bit in the exponent
-    exponent >>= 1n;
-  }
-  
-  return result;
+  return precisionModPow(base, exponent, modulus);
 }
 
 /**
  * Compute integer square root for BigInt
  * 
- * Returns the largest integer r such that r^2 <= n
+ * Uses the precision module's enhanced implementation with better convergence.
  */
 export function integerSqrt(n: bigint): bigint {
   if (n < 0n) {
-    throw new Error("Square root of negative number is not defined");
+    throw new Error('Square root of negative number is not defined');
   }
-  
-  if (n === 0n) return 0n;
-  if (n <= 3n) return 1n;
-  
-  // Use Newton's method to find the integer square root
-  // r_{n+1} = floor((r_n + floor(n/r_n))/2)
-  let x0 = n;
-  let x1 = (x0 + n / x0) >> 1n;
-  
-  while (x1 < x0) {
-    x0 = x1;
-    x1 = (x0 + n / x0) >> 1n;
-  }
-  
-  return x0;
+  const result = precisionIntegerSqrt(n);
+  return typeof result === 'bigint' ? result : BigInt(result);
 }
 
 /**
@@ -177,7 +148,7 @@ export function isPerfectSquare(n: bigint): boolean {
  */
 export function reconstructFromFactors(factors: Factor[]): bigint {
   return factors.reduce(
-    (acc, { prime, exponent }) => acc * prime ** BigInt(exponent),
+    (acc, { prime, exponent }) => acc * (prime ** BigInt(exponent)),
     1n
   );
 }
