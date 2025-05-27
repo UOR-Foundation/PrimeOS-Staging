@@ -17,13 +17,13 @@ import {
 
 /**
  * Represents a prime factor with exponent
- * Using regular numbers instead of bigint
+ * Using BigInt for unlimited precision
  */
 export interface Factor {
   /**
-   * Prime number (as regular number)
+   * Prime number (as BigInt for unlimited precision)
    */
-  prime: number;
+  prime: bigint;
   
   /**
    * Exponent of the prime
@@ -101,7 +101,7 @@ export interface VerificationResult {
   /**
    * Checksum value if extraction was successful
    */
-  checksum?: number;
+  checksum?: bigint;
   
   /**
    * Error message if verification failed
@@ -121,7 +121,7 @@ export interface ChecksumExtraction {
   /**
    * Checksum prime value
    */
-  checksumPrime: number;
+  checksumPrime: bigint;
   
   /**
    * Checksum exponent
@@ -154,12 +154,12 @@ export interface IntegrityProcessInput {
   /**
    * Value to operate on
    */
-  value?: number;
+  value?: bigint;
   
   /**
    * Array of values for batch operations
    */
-  values?: number[];
+  values?: bigint[];
   
   /**
    * Prime registry to use
@@ -174,22 +174,22 @@ export interface IntegrityInterface extends ModelInterface {
   /**
    * Generate a checksum from prime factors
    */
-  generateChecksum(factors: Factor[], primeRegistry?: any): Promise<number>;
+  generateChecksum(factors: Factor[], primeRegistry?: any): Promise<bigint>;
   
   /**
    * Attach a checksum to a value
    */
-  attachChecksum(value: number, factors: Factor[], primeRegistry?: any): Promise<number>;
+  attachChecksum(value: bigint, factors: Factor[], primeRegistry?: any): Promise<bigint>;
   
   /**
    * Verify the integrity of a checksummed value
    */
-  verifyIntegrity(value: number, primeRegistry?: any): Promise<VerificationResult>;
+  verifyIntegrity(value: bigint, primeRegistry?: any): Promise<VerificationResult>;
   
   /**
    * Extract checksum and core factors from a value
    */
-  extractChecksum(value: number, primeRegistry?: any): Promise<ChecksumExtraction>;
+  extractChecksum(value: bigint, primeRegistry?: any): Promise<ChecksumExtraction>;
   
   /**
    * Calculate XOR sum for factors
@@ -199,7 +199,7 @@ export interface IntegrityInterface extends ModelInterface {
   /**
    * Verify multiple values in batch
    */
-  verifyBatch(values: number[], primeRegistry?: any): Promise<VerificationResult[]>;
+  verifyBatch(values: bigint[], primeRegistry?: any): Promise<VerificationResult[]>;
   
   /**
    * Get access to the logger

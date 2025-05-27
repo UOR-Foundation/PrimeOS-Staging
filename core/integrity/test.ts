@@ -5,7 +5,7 @@
  * Comprehensive test suite for the integrity module implementing Axiom 2:
  * Data carries self-verification via checksums.
  * 
- * This implementation uses regular numbers instead of JavaScript bigint.
+ * This implementation uses BigInt for unlimited precision arithmetic.
  */
 
 import { 
@@ -123,8 +123,8 @@ describe('Integrity Module', () => {
     test('should reset state correctly', async () => {
       // Perform some operations
       const factors: Factor[] = [
-        { prime: 2, exponent: 3 },
-        { prime: 3, exponent: 2 }
+        { prime: 2n, exponent: 3 },
+        { prime: 3n, exponent: 2 }
       ];
       await instance.generateChecksum(factors);
       
@@ -155,14 +155,14 @@ describe('Integrity Module', () => {
   describe('Checksum Generation', () => {
     test('should generate checksum from factors', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 3 },
-        { prime: 3, exponent: 2 },
-        { prime: 5, exponent: 1 }
+        { prime: 2n, exponent: 3 },
+        { prime: 3n, exponent: 2 },
+        { prime: 5n, exponent: 1 }
       ];
       
       const checksum = await instance.generateChecksum(factors);
-      expect(typeof checksum).toBe('number');
-      expect(checksum).toBeGreaterThan(0);
+      expect(typeof checksum).toBe('bigint');
+      expect(checksum).toBeGreaterThan(0n);
       
       // Verify stats updated
       const state = instance.getState() as IntegrityState;
@@ -171,8 +171,8 @@ describe('Integrity Module', () => {
     
     test('should cache checksum results', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 2 },
-        { prime: 7, exponent: 1 }
+        { prime: 2n, exponent: 2 },
+        { prime: 7n, exponent: 1 }
       ];
       
       // First call
@@ -190,8 +190,8 @@ describe('Integrity Module', () => {
     
     test('should throw error for invalid factors', async () => {
       const invalidFactors: Factor[] = [
-        { prime: -2, exponent: 3 }, // Invalid: negative prime
-        { prime: 3, exponent: 0 }   // Invalid: zero exponent
+        { prime: -2n, exponent: 3 }, // Invalid: negative prime
+        { prime: 3n, exponent: 0 }   // Invalid: zero exponent
       ];
       
       await expect(instance.generateChecksum(invalidFactors)).rejects.toThrow(InvalidFactorError);
@@ -199,9 +199,9 @@ describe('Integrity Module', () => {
     
     test('should calculate XOR sum correctly', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 1 }, // prime index 0, so 0 * 1 = 0
-        { prime: 3, exponent: 2 }, // prime index 1, so 1 * 2 = 2
-        { prime: 5, exponent: 1 }  // prime index 2, so 2 * 1 = 2
+        { prime: 2n, exponent: 1 }, // prime index 0, so 0 * 1 = 0
+        { prime: 3n, exponent: 2 }, // prime index 1, so 1 * 2 = 2
+        { prime: 5n, exponent: 1 }  // prime index 2, so 2 * 1 = 2
       ];
       
       // XOR: 0 ^ 2 ^ 2 = 0
@@ -212,25 +212,25 @@ describe('Integrity Module', () => {
   
   describe('Checksum Attachment', () => {
     test('should attach checksum to value', async () => {
-      const rawValue = 60; // 2² × 3 × 5
+      const rawValue = 60n; // 2² × 3 × 5
       const factors: Factor[] = [
-        { prime: 2, exponent: 2 },
-        { prime: 3, exponent: 1 },
-        { prime: 5, exponent: 1 }
+        { prime: 2n, exponent: 2 },
+        { prime: 3n, exponent: 1 },
+        { prime: 5n, exponent: 1 }
       ];
       
       const withChecksum = await instance.attachChecksum(rawValue, factors);
       expect(withChecksum).toBeGreaterThan(rawValue);
       
       // Verify the checksum was attached by checking if the result is divisible by the original value
-      expect(withChecksum % rawValue).toBe(0);
+      expect(withChecksum % rawValue).toBe(0n);
     });
     
     test('should handle large values', async () => {
-      const largeValue = 123456789;
+      const largeValue = 123456789n;
       const factors: Factor[] = [
-        { prime: 2, exponent: 1 },
-        { prime: 3, exponent: 1 }
+        { prime: 2n, exponent: 1 },
+        { prime: 3n, exponent: 1 }
       ];
       
       const withChecksum = await instance.attachChecksum(largeValue, factors);
@@ -241,10 +241,10 @@ describe('Integrity Module', () => {
   describe('Checksum Extraction', () => {
     test('should extract checksum and core factors', async () => {
       const originalFactors: Factor[] = [
-        { prime: 2, exponent: 3 },
-        { prime: 3, exponent: 1 }
+        { prime: 2n, exponent: 3 },
+        { prime: 3n, exponent: 1 }
       ];
-      const rawValue = 24; // 2³ × 3¹
+      const rawValue = 24n; // 2³ × 3¹
       
       // Attach checksum
       const withChecksum = await instance.attachChecksum(rawValue, originalFactors);
@@ -255,11 +255,11 @@ describe('Integrity Module', () => {
       expect(extraction.valid).toBe(true);
       expect(extraction.coreFactors).toHaveLength(originalFactors.length);
       expect(extraction.checksumExponent).toBeGreaterThanOrEqual(6); // Should be at least the checksum power
-      expect(extraction.checksumPrime).toBeGreaterThan(0);
+      expect(extraction.checksumPrime).toBeGreaterThan(0n);
     });
     
     test('should handle values without checksums', async () => {
-      const valueWithoutChecksum = 42;
+      const valueWithoutChecksum = 42n;
       
       const extraction = await instance.extractChecksum(valueWithoutChecksum);
       expect(extraction.valid).toBe(false);
@@ -270,10 +270,10 @@ describe('Integrity Module', () => {
   describe('Integrity Verification', () => {
     test('should verify valid checksummed values', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 2 },
-        { prime: 7, exponent: 1 }
+        { prime: 2n, exponent: 2 },
+        { prime: 7n, exponent: 1 }
       ];
-      const rawValue = 28; // 2² × 7¹
+      const rawValue = 28n; // 2² × 7¹
       
       const withChecksum = await instance.attachChecksum(rawValue, factors);
       const verification = await instance.verifyIntegrity(withChecksum);
@@ -291,15 +291,15 @@ describe('Integrity Module', () => {
     
     test('should detect corrupted checksums', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 1 },
-        { prime: 3, exponent: 1 }
+        { prime: 2n, exponent: 1 },
+        { prime: 3n, exponent: 1 }
       ];
-      const rawValue = 6; // 2¹ × 3¹
+      const rawValue = 6n; // 2¹ × 3¹
       
       const withChecksum = await instance.attachChecksum(rawValue, factors);
       
       // Corrupt the value (just add 1 to simulate bit flip)
-      const corruptedValue = withChecksum + 1;
+      const corruptedValue = withChecksum + 1n;
       
       const verification = await instance.verifyIntegrity(corruptedValue);
       expect(verification.valid).toBe(false);
@@ -311,7 +311,7 @@ describe('Integrity Module', () => {
     });
     
     test('should handle values without checksums gracefully', async () => {
-      const valueWithoutChecksum = 42;
+      const valueWithoutChecksum = 42n;
       
       const verification = await instance.verifyIntegrity(valueWithoutChecksum);
       expect(verification.valid).toBe(false);
@@ -321,13 +321,13 @@ describe('Integrity Module', () => {
   
   describe('Batch Verification', () => {
     test('should verify multiple values', async () => {
-      const factors1: Factor[] = [{ prime: 2, exponent: 1 }];
-      const factors2: Factor[] = [{ prime: 3, exponent: 2 }];
-      const factors3: Factor[] = [{ prime: 5, exponent: 1 }];
+      const factors1: Factor[] = [{ prime: 2n, exponent: 1 }];
+      const factors2: Factor[] = [{ prime: 3n, exponent: 2 }];
+      const factors3: Factor[] = [{ prime: 5n, exponent: 1 }];
       
-      const value1 = await instance.attachChecksum(2, factors1);
-      const value2 = await instance.attachChecksum(9, factors2);
-      const value3 = await instance.attachChecksum(5, factors3);
+      const value1 = await instance.attachChecksum(2n, factors1);
+      const value2 = await instance.attachChecksum(9n, factors2);
+      const value3 = await instance.attachChecksum(5n, factors3);
       
       const results = await instance.verifyBatch([value1, value2, value3]);
       
@@ -336,9 +336,9 @@ describe('Integrity Module', () => {
     });
     
     test('should handle mixed valid/invalid values', async () => {
-      const factors: Factor[] = [{ prime: 2, exponent: 1 }];
-      const validValue = await instance.attachChecksum(2, factors);
-      const invalidValue = 42; // No checksum
+      const factors: Factor[] = [{ prime: 2n, exponent: 1 }];
+      const validValue = await instance.attachChecksum(2n, factors);
+      const invalidValue = 42n; // No checksum
       
       const results = await instance.verifyBatch([validValue, invalidValue]);
       
@@ -351,8 +351,8 @@ describe('Integrity Module', () => {
   describe('Process Interface', () => {
     test('should handle generateChecksum operation', async () => {
       const factors: Factor[] = [
-        { prime: 2, exponent: 1 },
-        { prime: 3, exponent: 1 }
+        { prime: 2n, exponent: 1 },
+        { prime: 3n, exponent: 1 }
       ];
       
       const result = await instance.process({
@@ -361,12 +361,12 @@ describe('Integrity Module', () => {
       });
       
       expect(result.success).toBe(true);
-      expect(typeof result.data).toBe('number');
+      expect(typeof result.data).toBe('bigint');
     });
     
     test('should handle attachChecksum operation', async () => {
-      const factors: Factor[] = [{ prime: 2, exponent: 2 }];
-      const value = 4;
+      const factors: Factor[] = [{ prime: 2n, exponent: 2 }];
+      const value = 4n;
       
       const result = await instance.process({
         operation: 'attachChecksum',
@@ -375,12 +375,12 @@ describe('Integrity Module', () => {
       });
       
       expect(result.success).toBe(true);
-      expect(result.data as number).toBeGreaterThan(value);
+      expect(result.data as bigint).toBeGreaterThan(value);
     });
     
     test('should handle verifyIntegrity operation', async () => {
-      const factors: Factor[] = [{ prime: 3, exponent: 1 }];
-      const value = await instance.attachChecksum(3, factors);
+      const factors: Factor[] = [{ prime: 3n, exponent: 1 }];
+      const value = await instance.attachChecksum(3n, factors);
       
       const result = await instance.process({
         operation: 'verifyIntegrity',
@@ -438,7 +438,7 @@ describe('Integrity Module', () => {
       const noCacheInstance = createIntegrity({ enableCache: false });
       await noCacheInstance.initialize();
       
-      const factors: Factor[] = [{ prime: 2, exponent: 1 }];
+      const factors: Factor[] = [{ prime: 2n, exponent: 1 }];
       
       // Generate checksum twice
       await noCacheInstance.generateChecksum(factors);
@@ -464,7 +464,7 @@ describe('Integrity Module', () => {
     
     test('should handle errors in checksum generation gracefully', async () => {
       const invalidFactors: Factor[] = [
-        { prime: 0, exponent: 1 } // Invalid prime
+        { prime: 0n, exponent: 1 } // Invalid prime
       ];
       
       await expect(instance.generateChecksum(invalidFactors)).rejects.toThrow(InvalidFactorError);
@@ -474,9 +474,9 @@ describe('Integrity Module', () => {
   describe('Round-trip Integrity', () => {
     test('should maintain integrity through attach/verify cycle', async () => {
       const testCases = [
-        { value: 12, factors: [{ prime: 2, exponent: 2 }, { prime: 3, exponent: 1 }] },
-        { value: 30, factors: [{ prime: 2, exponent: 1 }, { prime: 3, exponent: 1 }, { prime: 5, exponent: 1 }] },
-        { value: 128, factors: [{ prime: 2, exponent: 7 }] }
+        { value: 12n, factors: [{ prime: 2n, exponent: 2 }, { prime: 3n, exponent: 1 }] },
+        { value: 30n, factors: [{ prime: 2n, exponent: 1 }, { prime: 3n, exponent: 1 }, { prime: 5n, exponent: 1 }] },
+        { value: 128n, factors: [{ prime: 2n, exponent: 7 }] }
       ];
       
       for (const testCase of testCases) {
@@ -491,14 +491,14 @@ describe('Integrity Module', () => {
   
   describe('Performance and Statistics', () => {
     test('should track operation statistics', async () => {
-      const factors: Factor[] = [{ prime: 2, exponent: 1 }];
-      const value = 2;
+      const factors: Factor[] = [{ prime: 2n, exponent: 1 }];
+      const value = 2n;
       
       // Perform several operations
       await instance.generateChecksum(factors);
       const withChecksum = await instance.attachChecksum(value, factors);
       await instance.verifyIntegrity(withChecksum);
-      await instance.verifyIntegrity(42); // This should fail
+      await instance.verifyIntegrity(42n); // This should fail
       
       const state = instance.getState() as IntegrityState;
       expect(state.stats.checksumsGenerated).toBeGreaterThan(0);
@@ -507,7 +507,7 @@ describe('Integrity Module', () => {
     });
     
     test('should provide cache statistics', async () => {
-      const factors: Factor[] = [{ prime: 3, exponent: 1 }];
+      const factors: Factor[] = [{ prime: 3n, exponent: 1 }];
       
       // Generate checksum multiple times (should use cache)
       await instance.generateChecksum(factors);

@@ -5,7 +5,7 @@
  * This module implements Axiom 2: Data carries self-verification via checksums.
  * Based on the UOR CPU implementation pattern with XOR-based checksums and 6th power attachment.
  * 
- * This implementation uses regular numbers instead of JavaScript bigint.
+ * This implementation uses BigInt for unlimited precision arithmetic.
  */
 
 import {
@@ -81,45 +81,67 @@ class IntegrityCache {
 }
 
 /**
- * Mock prime registry for standalone operation
+ * Mock prime registry for standalone operation with proper input validation
  * Will be replaced with actual prime registry integration
  */
 class MockPrimeRegistry {
-  private primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97];
+  private primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n, 97n];
   
-  getPrime(index: number): number {
+  getPrime(index: number): bigint {
+    // Input validation
+    if (!Number.isInteger(index) || index < 0) {
+      throw new Error(`Invalid prime index: ${index}. Must be a non-negative integer.`);
+    }
+    
     if (index < this.primes.length) {
       return this.primes[index];
     }
     // Simple approximation for larger indices
-    return index * 2 + 1;
+    return BigInt(index * 2 + 1);
   }
   
-  getIndex(prime: number): number {
-    const index = this.primes.indexOf(prime);
+  getIndex(prime: bigint): number {
+    // Input validation
+    if (typeof prime !== 'bigint' || prime <= 0n) {
+      throw new Error(`Invalid prime: ${prime}. Must be a positive BigInt.`);
+    }
+    
+    const primeStr = prime.toString();
+    const index = this.primes.findIndex(p => p.toString() === primeStr);
     if (index >= 0) return index;
     // Simple approximation for primes not in table
-    return Math.floor((prime - 1) / 2);
+    return Number((prime - 1n) / 2n);
   }
   
-  factor(n: number): Factor[] {
+  factor(n: bigint): Factor[] {
+    // Input validation
+    if (typeof n !== 'bigint') {
+      throw new Error(`Invalid input: ${n}. Must be a BigInt.`);
+    }
+    if (n <= 0n) {
+      throw new Error(`Cannot factor non-positive number: ${n}`);
+    }
+    if (n === 1n) {
+      return [];
+    }
+    
     const factors: Factor[] = [];
     let remaining = n;
     
     for (const prime of this.primes) {
       let exponent = 0;
-      while (remaining % prime === 0) {
+      while (remaining % prime === 0n) {
         exponent++;
         remaining = remaining / prime;
       }
       if (exponent > 0) {
         factors.push({ prime, exponent });
       }
-      if (remaining === 1) break;
+      if (remaining === 1n) break;
     }
     
     // Handle remaining prime factor
-    if (remaining > 1) {
+    if (remaining > 1n) {
       factors.push({ prime: remaining, exponent: 1 });
     }
     
@@ -235,12 +257,12 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
   /**
    * Generate a checksum from prime factors using XOR pattern
    */
-  async generateChecksum(factors: Factor[], primeRegistry?: any): Promise<number> {
+  async generateChecksum(factors: Factor[], primeRegistry?: any): Promise<bigint> {
     const registry = primeRegistry || this.mockRegistry;
     
     // Validate factors
     for (const factor of factors) {
-      if (factor.prime <= 0 || factor.exponent <= 0) {
+      if (factor.prime <= 0n || factor.exponent <= 0) {
         throw new InvalidFactorError(factor);
       }
     }
@@ -279,10 +301,10 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
   /**
    * Attach a checksum to a value as the 6th power of checksum prime
    */
-  async attachChecksum(value: number, factors: Factor[], primeRegistry?: any): Promise<number> {
+  async attachChecksum(value: bigint, factors: Factor[], primeRegistry?: any): Promise<bigint> {
     const checksum = await this.generateChecksum(factors, primeRegistry);
-    const power = this.config.checksumPower;
-    const result = value * Math.pow(checksum, power);
+    const power = BigInt(this.config.checksumPower);
+    const result = value * (checksum ** power);
     
     await this.logger.debug('Attached checksum', {
       originalValue: value.toString(),
@@ -297,7 +319,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
   /**
    * Verify the integrity of a checksummed value
    */
-  async verifyIntegrity(value: number, primeRegistry?: any): Promise<VerificationResult> {
+  async verifyIntegrity(value: bigint, primeRegistry?: any): Promise<VerificationResult> {
     this.stats.verificationsPerformed++;
     
     try {
@@ -352,7 +374,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
   /**
    * Extract checksum and core factors from a checksummed value
    */
-  async extractChecksum(value: number, primeRegistry?: any): Promise<ChecksumExtraction> {
+  async extractChecksum(value: bigint, primeRegistry?: any): Promise<ChecksumExtraction> {
     const registry = primeRegistry || this.mockRegistry;
     
     try {
@@ -360,7 +382,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
       const allFactors = registry.factor(value);
       
       // Find checksum (factor with exponent >= checksumPower)
-      let checksumPrime: number | undefined;
+      let checksumPrime: bigint | undefined;
       let checksumExponent = 0;
       const coreFactors: Factor[] = [];
       
@@ -383,7 +405,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
       if (!checksumPrime) {
         return {
           coreFactors: [],
-          checksumPrime: 0,
+          checksumPrime: 0n,
           checksumExponent: 0,
           valid: false,
           error: 'No checksum found (no factor with exponent >= checksumPower)'
@@ -407,7 +429,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
       await this.logger.error('Checksum extraction failed', error);
       return {
         coreFactors: [],
-        checksumPrime: 0,
+        checksumPrime: 0n,
         checksumExponent: 0,
         valid: false,
         error: error instanceof Error ? error.message : 'Unknown extraction error'
@@ -438,7 +460,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
   /**
    * Verify multiple values in batch
    */
-  async verifyBatch(values: number[], primeRegistry?: any): Promise<VerificationResult[]> {
+  async verifyBatch(values: bigint[], primeRegistry?: any): Promise<VerificationResult[]> {
     await this.logger.debug('Starting batch verification', { count: values.length });
     
     const results: VerificationResult[] = [];
