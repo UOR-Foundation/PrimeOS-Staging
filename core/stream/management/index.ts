@@ -154,7 +154,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    */
   getOverallStats(): ManagementSuiteStats {
     // Safely get backpressure stats with fallback
-    const backpressureStats = (this.backpressureController as any).getStatistics ? 
+    const backpressureStats = (this.backpressureController as any)?.getStatistics ? 
       (this.backpressureController as BackpressureControllerImpl).getStatistics() : 
       {
         currentState: BackpressureState?.NORMAL || 'normal',
@@ -163,8 +163,25 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         isPaused: false
       };
     
-    const memoryStats = this.memoryManager.getManagementStats();
-    const bufferStats = this.memoryManager.getBufferStats();
+    const memoryStats = this.memoryManager?.getManagementStats() || {
+      strategy: 'balanced' as any,
+      gcTriggers: 0,
+      pressureEvents: 0,
+      totalPressureTime: 0,
+      averagePressureTime: 0,
+      leaksDetected: 0,
+      bufferAdjustments: 0,
+      peakMemoryUsage: 0,
+      averageMemoryUsage: 0
+    };
+    const bufferStats = this.memoryManager?.getBufferStats() || {
+      totalAllocated: 0,
+      totalReleased: 0,
+      activeBuffers: 0,
+      peakUsage: 0,
+      averageBufferSize: 0,
+      totalBufferMemory: 0
+    };
     
     return {
       backpressure: {
@@ -175,13 +192,13 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       },
       memory: {
         strategy: memoryStats.strategy,
-        currentUsage: this.memoryManager.getMemoryStats().used,
+        currentUsage: this.memoryManager?.getMemoryStats()?.used || 0,
         peakUsage: memoryStats.peakMemoryUsage,
         gcTriggers: memoryStats.gcTriggers,
         activeBuffers: bufferStats.activeBuffers
       },
       performance: {
-        strategy: this.performanceOptimizer.getOptimizationStrategy(),
+        strategy: this.performanceOptimizer?.getOptimizationStrategy() || 'balanced',
         currentThroughput: 0, // Would be updated from actual metrics
         averageLatency: 0, // Would be updated from actual metrics
         optimizationCount: 0 // Would track optimizations
@@ -366,15 +383,17 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     this.disableCoordinatedOptimization();
     
     // Stop individual components that have stop methods
-    this.memoryManager.stop();
+    if (this.memoryManager && this.memoryManager.stop) {
+      this.memoryManager.stop();
+    }
     
     // Stop backpressure controller if it has a stop method
-    if ((this.backpressureController as any).stop) {
+    if (this.backpressureController && (this.backpressureController as any).stop) {
       (this.backpressureController as any).stop();
     }
     
     // Stop performance optimizer if it has a stop method
-    if ((this.performanceOptimizer as any).stop) {
+    if (this.performanceOptimizer && (this.performanceOptimizer as any).stop) {
       (this.performanceOptimizer as any).stop();
     }
   }
@@ -416,14 +435,29 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       };
     }
     
-    return createEnhancedBackpressureController(
-      this.config.backpressure || {},
-      {
-        logger: this.logger,
-        enableDetailedLogging: this.config.enableDetailedLogging,
-        maxBufferSize: 10000
+    try {
+      // Try enhanced controller first
+      return createEnhancedBackpressureController(
+        this.config.backpressure || {},
+        {
+          logger: this.logger,
+          enableDetailedLogging: this.config.enableDetailedLogging,
+          maxBufferSize: 10000
+        }
+      );
+    } catch (error) {
+      // Fallback to basic controller if enhanced fails
+      if (this.logger) {
+        this.logger.warn('Enhanced backpressure controller failed, using basic controller', error).catch(() => {});
       }
-    );
+      return createBackpressureController(
+        this.config.backpressure || {},
+        {
+          logger: this.logger,
+          maxBufferSize: 10000
+        }
+      );
+    }
   }
   
   /**
@@ -508,7 +542,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       this.stats.totalMemoryManaged = bufferStats.totalBufferMemory;
       
       // Coordinate optimizations based on system state
-      if (backpressureStats.isPaused && memoryStats.used > memoryStats.total * 0.9) {
+      if (backpressureStats.isPaused && memoryStats && memoryStats.used > memoryStats.total * 0.9) {
         // High memory pressure - trigger aggressive memory management
         this.memoryManager.triggerGC();
         
@@ -519,7 +553,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         if (this.logger && memoryOptimizations.length > 0) {
           this.logger.info('Coordinated memory optimization triggered', {
             suggestions: memoryOptimizations.length,
-            memoryUsage: memoryStats.used,
+            memoryUsage: memoryStats?.used || 0,
             backpressurePaused: true
           }).catch(() => {});
         }
@@ -528,7 +562,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       if (this.logger && this.config.enableDetailedLogging) {
         this.logger.debug('Coordinated optimization completed', {
           optimizationCount: this.stats.coordinatedOptimizations,
-          memoryUsage: memoryStats.used,
+          memoryUsage: memoryStats?.used || 0,
           backpressureState: backpressureStats.currentState
         }).catch(() => {});
       }

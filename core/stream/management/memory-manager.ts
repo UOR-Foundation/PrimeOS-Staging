@@ -174,6 +174,20 @@ export class MemoryManager {
     
     // Check memory constraints
     const memoryStats = getMemoryStats();
+    // Handle case where memory stats are unavailable (e.g., in test environment)
+    if (!memoryStats) {
+      if (this.logger) {
+        this.logger.debug('Memory stats unavailable, allowing buffer resize', { id, newSize }).catch(() => {});
+      }
+      // Update buffer without memory constraint check
+      buffer.size = newSize;
+      buffer.lastUsed = Date.now();
+      buffer.growthRate = growthFactor;
+      this.bufferStats.totalAllocated += (newSize - oldSize);
+      this.stats.bufferAdjustments++;
+      return true;
+    }
+    
     const projectedUsage = memoryStats.used + (newSize - oldSize);
     
     if (projectedUsage > this.config.maxMemoryUsage) {
@@ -235,6 +249,11 @@ export class MemoryManager {
    */
   getOptimalBufferSize(currentSize: number, usage: number): number {
     const memoryStats = getMemoryStats();
+    // Handle case where memory stats are unavailable (e.g., in test environment)
+    if (!memoryStats) {
+      return currentSize; // Return current size when memory stats unavailable
+    }
+    
     const memoryPressure = memoryStats.used / memoryStats.total;
     
     let targetSize = currentSize;
@@ -329,7 +348,7 @@ export class MemoryManager {
   /**
    * Get current memory statistics
    */
-  getMemoryStats(): MemoryStats {
+  getMemoryStats(): MemoryStats | undefined {
     return getMemoryStats();
   }
   
@@ -455,6 +474,11 @@ export class MemoryManager {
    */
   private checkMemoryStatus(): void {
     const memoryStats = getMemoryStats();
+    // Handle case where memory stats are unavailable (e.g., in test environment)
+    if (!memoryStats) {
+      return; // Skip monitoring when memory stats unavailable
+    }
+    
     const memoryPressure = memoryStats.used / memoryStats.total;
     
     // Update statistics
@@ -578,10 +602,17 @@ export class MemoryManager {
    * Emit a memory management event
    */
   private emitEvent(type: MemoryEvent['type'], details?: Record<string, any>): void {
+    const memoryStats = getMemoryStats();
     const event: MemoryEvent = {
       type,
       timestamp: Date.now(),
-      memoryUsage: getMemoryStats(),
+      memoryUsage: memoryStats || {
+        used: 0,
+        total: 500 * 1024 * 1024, // 500MB default
+        available: 500 * 1024 * 1024,
+        bufferSize: 8192,
+        gcCollections: 0
+      },
       details
     };
     

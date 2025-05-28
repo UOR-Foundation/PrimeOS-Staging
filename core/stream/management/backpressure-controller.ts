@@ -166,7 +166,7 @@ export class BackpressureControllerImpl implements BackpressureController {
   /**
    * Get current memory usage
    */
-  getMemoryUsage(): MemoryStats {
+  getMemoryUsage(): MemoryStats | undefined {
     return getMemoryStats();
   }
   
@@ -294,6 +294,17 @@ export class BackpressureControllerImpl implements BackpressureController {
     
     const bufferUtilization = this.getBufferLevel();
     const memoryStats = getMemoryStats();
+    // Handle case where memory stats are unavailable (e.g., in test environment)
+    if (!memoryStats) {
+      // Use buffer-only pressure detection
+      this.applyPressureControls(bufferUtilization, 0);
+      const newState = this.calculateState(bufferUtilization, 0);
+      if (newState !== this.currentState) {
+        this.updateState(newState);
+      }
+      return;
+    }
+    
     const memoryUtilization = memoryStats.used / memoryStats.total;
     
     // Apply backpressure controls first
@@ -326,7 +337,13 @@ export class BackpressureControllerImpl implements BackpressureController {
     memoryUtilization?: number
   ): BackpressureState {
     const bufferLevel = bufferUtilization ?? this.getBufferLevel();
-    const memoryLevel = memoryUtilization ?? (getMemoryStats().used / getMemoryStats().total);
+    let memoryLevel = memoryUtilization;
+    
+    // Handle case where memory stats are unavailable
+    if (memoryLevel === undefined) {
+      const memoryStats = getMemoryStats();
+      memoryLevel = memoryStats ? (memoryStats.used / memoryStats.total) : 0;
+    }
     
     // Calculate state purely based on current levels (ignore pause state)
     if (bufferLevel >= this.config.blockingThreshold || memoryLevel >= this.config.memoryThreshold) {
@@ -361,11 +378,12 @@ export class BackpressureControllerImpl implements BackpressureController {
     }
     
     if (this.logger && this.config.enableLogging && previousState !== newState) {
+      const memoryStats = getMemoryStats();
       this.logger.info('Backpressure state changed', {
         from: previousState,
         to: newState,
         bufferLevel: this.getBufferLevel(),
-        memoryUsage: getMemoryStats().used / getMemoryStats().total
+        memoryUsage: memoryStats ? (memoryStats.used / memoryStats.total) : 0
       }).catch(() => {});
     }
   }
@@ -405,12 +423,13 @@ export class BackpressureControllerImpl implements BackpressureController {
    * Emit backpressure event
    */
   private emitEvent(type: BackpressureEvent['type'], details?: Record<string, any>): void {
+    const memoryStats = getMemoryStats();
     const event: BackpressureEvent = {
       type,
       timestamp: Date.now(),
       state: this.currentState,
       bufferLevel: this.getBufferLevel(),
-      memoryUsage: getMemoryStats().used / getMemoryStats().total,
+      memoryUsage: memoryStats ? (memoryStats.used / memoryStats.total) : 0,
       details
     };
     

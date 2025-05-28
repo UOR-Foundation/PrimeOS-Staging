@@ -314,7 +314,7 @@ export interface BackpressureController {
   
   // Monitoring
   getBufferLevel(): number;
-  getMemoryUsage(): MemoryStats;
+  getMemoryUsage(): MemoryStats | undefined;
   onPressure(callback: () => void): void;
   
   // Configuration

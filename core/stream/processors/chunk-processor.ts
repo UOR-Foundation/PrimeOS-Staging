@@ -142,7 +142,17 @@ export class ChunkProcessorImpl<T> implements ChunkProcessor<T> {
   }
   
   getMemoryUsage(): number {
-    return calculateMemoryUsage() + this.estimateBufferSize();
+    try {
+      const baseUsage = calculateMemoryUsage();
+      const bufferUsage = this.estimateBufferSize();
+      
+      // Ensure both values are valid numbers
+      const usage = (isNaN(baseUsage) ? 0 : baseUsage) + (isNaN(bufferUsage) ? 0 : bufferUsage);
+      return Math.max(0, usage); // Ensure non-negative
+    } catch (error) {
+      // Fallback to a reasonable estimate
+      return this.estimateBufferSize() || 0;
+    }
   }
   
   shouldApplyBackpressure(): boolean {
