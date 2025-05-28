@@ -84,8 +84,11 @@ export class ModularImpl extends BaseModel implements ModularModelInterface {
     // Store modular-specific options
     this.config = { ...DEFAULT_OPTIONS, ...options };
     
-    // Get logger
-    this.logger = this.getLogger();
+    // Create logger
+    this.logger = createLogging({
+      name: this.config.name || 'precision-modular',
+      debug: this.config.debug || false
+    });
     
     // Create algorithms with appropriate options
     this.algorithms = createModularAlgorithms({

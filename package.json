@@ -42,6 +42,9 @@
   },
   "dependencies": {
     "core": "file:core/precision/cache/core",
-    "os-tests": "file:os/os-tests"
+    "os-tests": "file:os/os-tests",
+    "encoding": "file:core/encoding",
+    "stream": "file:core/stream",
+    "bands": "file:core/bands"
   }
 }

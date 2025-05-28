@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["jest", "node"],
+    "baseUrl": "../..",
+    "paths": {
+      "@primeos/core-precision": ["core/precision/index.ts"],
+      "@primeos/core-precision/*": ["core/precision/*"],
+      "@primeos/core-prime": ["core/prime/index.ts"],
+      "@primeos/core-encoding": ["core/encoding/index.ts"],
+      "@primeos/core-integrity": ["core/integrity/index.ts"],
+      "@primeos/os-model": ["os/model/index.ts"],
+      "@primeos/os-logging": ["os/logging/index.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "../../os/**/*.ts",
+    "../../core/precision/**/*.ts",
+    "../../core/prime/**/*.ts",
+    "../../core/encoding/**/*.ts",
+    "../../core/integrity/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

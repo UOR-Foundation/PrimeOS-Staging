@@ -1,0 +1,38 @@
+{
+  "name": "stream",
+  "version": "0.1.0",
+  "description": "High-throughput streaming primitives for efficient data processing",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"**/*.ts\""
+  },
+  "keywords": [
+    "primeos",
+    "stream",
+    "processing",
+    "throughput"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "primeos": "^0.1.0",
+    "@primeos/core-prime": "^1.0.0",
+    "@primeos/core-encoding": "^1.0.0",
+    "@primeos/core-integrity": "^1.0.0",
+    "@primeos/core-precision": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.3",
+    "jest": "^29.6.2",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.1.6",
+    "eslint": "^8.44.0",
+    "@typescript-eslint/eslint-plugin": "^6.2.0",
+    "@typescript-eslint/parser": "^6.2.0",
+    "prettier": "^3.0.0"
+  }
+}
