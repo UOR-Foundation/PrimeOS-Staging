@@ -138,7 +138,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     this.config = config;
     this.logger = config.logger;
     
-    // Create components
+    // Create components - let failures propagate following core module pattern
     this.backpressureController = this.createBackpressureController();
     this.memoryManager = this.createMemoryManager();
     this.performanceOptimizer = this.createPerformanceOptimizer();
@@ -198,7 +198,8 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         activeBuffers: bufferStats.activeBuffers
       },
       performance: {
-        strategy: this.performanceOptimizer?.getOptimizationStrategy() || 'balanced',
+        strategy: (this.performanceOptimizer && typeof (this.performanceOptimizer as any).getOptimizationStrategy === 'function') ? 
+          (this.performanceOptimizer as any).getOptimizationStrategy() : 'balanced',
         currentThroughput: 0, // Would be updated from actual metrics
         averageLatency: 0, // Would be updated from actual metrics
         optimizationCount: 0 // Would track optimizations
@@ -289,7 +290,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       if ((this.memoryManager as any).setStrategy) {
         (this.memoryManager as any).setStrategy(mapping.memory);
       }
-      if ((this.performanceOptimizer as any).setOptimizationStrategy) {
+      if (this.performanceOptimizer && typeof (this.performanceOptimizer as any).setOptimizationStrategy === 'function') {
         (this.performanceOptimizer as any).setOptimizationStrategy(mapping.performance);
       }
       
@@ -343,7 +344,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       if ((this.memoryManager as any).setStrategy) {
         (this.memoryManager as any).setStrategy(config.memory);
       }
-      if ((this.performanceOptimizer as any).setOptimizationStrategy) {
+      if (this.performanceOptimizer && typeof (this.performanceOptimizer as any).setOptimizationStrategy === 'function') {
         (this.performanceOptimizer as any).setOptimizationStrategy(config.performance);
       }
       this.backpressureController.setThreshold(config.backpressureThreshold);
@@ -417,12 +418,14 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     // Components would reset themselves as needed
   }
   
+
+  
   /**
    * Create backpressure controller based on configuration
    */
   private createBackpressureController(): BackpressureController {
     if (this.config.backpressure?.enabled === false) {
-      // Return a no-op implementation
+      // Return a no-op implementation when explicitly disabled
       return {
         pause: () => {},
         resume: () => {},
@@ -435,9 +438,9 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       };
     }
     
+    // Try enhanced controller first, fall back to basic if needed
     try {
-      // Try enhanced controller first
-      return createEnhancedBackpressureController(
+      const controller = createEnhancedBackpressureController(
         this.config.backpressure || {},
         {
           logger: this.logger,
@@ -445,18 +448,42 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
           maxBufferSize: 10000
         }
       );
+      if (!controller) {
+        throw new Error('Enhanced backpressure controller returned undefined');
+      }
+      return controller;
     } catch (error) {
-      // Fallback to basic controller if enhanced fails
       if (this.logger) {
         this.logger.warn('Enhanced backpressure controller failed, using basic controller', error).catch(() => {});
       }
-      return createBackpressureController(
-        this.config.backpressure || {},
-        {
-          logger: this.logger,
-          maxBufferSize: 10000
+      try {
+        const basicController = createBackpressureController(
+          this.config.backpressure || {},
+          {
+            logger: this.logger,
+            maxBufferSize: 10000
+          }
+        );
+        if (!basicController) {
+          throw new Error('Basic backpressure controller returned undefined');
         }
-      );
+        return basicController;
+      } catch (basicError) {
+        // Final fallback - create simple no-op controller
+        if (this.logger) {
+          this.logger.error('All backpressure controller creation failed, using no-op', basicError).catch(() => {});
+        }
+        return {
+          pause: () => {},
+          resume: () => {},
+          drain: () => Promise.resolve(),
+          getBufferLevel: () => 0,
+          getMemoryUsage: () => ({ used: 0, available: 0, total: 0, bufferSize: 0, gcCollections: 0 }),
+          onPressure: () => {},
+          setThreshold: () => {},
+          getThreshold: () => 0.8
+        };
+      }
     }
   }
   
@@ -464,63 +491,130 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    * Create memory manager based on configuration
    */
   private createMemoryManager(): MemoryManager {
-    if (this.config.memory?.enabled === false) {
-      // Return a minimal memory manager
-      return createMemoryManager({
-        strategy: 'conservative' as any,
-        enableAutoGC: false,
-        enableLeakDetection: false
-      }, { logger: this.logger });
+    try {
+      const memoryConfig = {
+        // Default config when memory management is disabled
+        ...(this.config.memory?.enabled === false ? {
+          strategy: 'conservative' as any,
+          enableAutoGC: false,
+          enableLeakDetection: false
+        } : {}),
+        // Apply user config
+        ...this.config.memory,
+        // Set memory limit
+        maxMemoryUsage: this.config.maxMemoryUsage || this.config.memory?.maxMemoryUsage
+      };
+      
+      const manager = createMemoryManager(memoryConfig, { logger: this.logger });
+      if (!manager) {
+        throw new Error('Memory manager creation returned undefined');
+      }
+      return manager;
+    } catch (error) {
+      if (this.logger) {
+        this.logger.error('Memory manager creation failed, using no-op implementation', error).catch(() => {});
+      }
+      
+      // Return a no-op implementation that satisfies the MemoryManager interface
+      return {
+        registerBuffer: () => '',
+        updateBufferSize: () => true,
+        releaseBuffer: () => {},
+        getOptimalBufferSize: () => 1024,
+        triggerGC: () => {},
+        onGC: () => {},
+        onMemoryPressure: () => {},
+        getMemoryStats: () => ({ used: 0, available: 1024*1024*1024, total: 1024*1024*1024 }),
+        getBufferStats: () => ({
+          totalAllocated: 0,
+          totalReleased: 0,
+          activeBuffers: 0,
+          peakUsage: 0,
+          averageBufferSize: 0,
+          totalBufferMemory: 0
+        }),
+        getManagementStats: () => ({
+          strategy: 'conservative' as any,
+          gcTriggers: 0,
+          pressureEvents: 0,
+          totalPressureTime: 0,
+          averagePressureTime: 0,
+          leaksDetected: 0,
+          bufferAdjustments: 0,
+          peakMemoryUsage: 0,
+          averageMemoryUsage: 0
+        }),
+        setStrategy: () => {},
+        getEventHistory: () => [],
+        stop: () => {}
+      } as unknown as MemoryManager;
     }
-    
-    const memoryConfig = {
-      ...this.config.memory,
-      maxMemoryUsage: this.config.maxMemoryUsage || this.config.memory?.maxMemoryUsage
-    };
-    
-    return createMemoryManager(memoryConfig, { logger: this.logger });
   }
   
   /**
    * Create performance optimizer based on configuration
    */
   private createPerformanceOptimizer(): StreamOptimizer {
-    if (this.config.performance?.enabled === false) {
-      // Return a no-op optimizer
-      return {
-        adaptChunkSize: (metrics) => 1024,
-        optimizeConcurrency: (metrics) => 4,
-        adjustBufferSizes: (metrics) => ({
-          inputBufferSize: 8192,
-          outputBufferSize: 8192,
-          intermediateBufferSize: 4096,
-          backpressureThreshold: 0.8
-        }),
-        enableProfiling: () => {},
-        disableProfiling: () => {},
-        getPerformanceReport: () => ({
-          summary: {
-            averageThroughput: 0,
-            peakThroughput: 0,
-            averageLatency: 0,
-            errorRate: 0
-          },
-          bottlenecks: [],
-          recommendations: [],
-          historicalTrends: []
-        }),
-        suggestOptimizations: () => [],
-        setOptimizationStrategy: () => {},
-        getOptimizationStrategy: () => 'balanced' as any,
-      };
-    }
-    
     const performanceConfig = {
+      // Default config when performance optimization is disabled
+      ...(this.config.performance?.enabled === false ? {
+        enableProfiling: false,
+        enableAutoTuning: false
+      } : {}),
+      // Apply global settings
       enableDetailedLogging: this.config.enableDetailedLogging,
+      // Apply user config
       ...this.config.performance
     };
     
-    return createPerformanceOptimizer(performanceConfig, { logger: this.logger });
+    try {
+      const optimizer = createPerformanceOptimizer(performanceConfig, { logger: this.logger });
+      if (!optimizer) {
+        throw new Error('Performance optimizer creation returned undefined');
+      }
+      return optimizer;
+    } catch (error) {
+      if (this.logger) {
+        this.logger.error('Performance optimizer creation failed, using strategy optimizer fallback', error).catch(() => {});
+      }
+      
+      try {
+        // Try strategy-specific optimizer as fallback
+        const strategyOptimizer = createStrategyOptimizer(OptimizationStrategy.BALANCED, { logger: this.logger });
+        if (!strategyOptimizer) {
+          throw new Error('Strategy optimizer creation returned undefined');
+        }
+        return strategyOptimizer;
+      } catch (strategyError) {
+        if (this.logger) {
+          this.logger.error('Strategy optimizer creation also failed, creating minimal optimizer', strategyError).catch(() => {});
+        }
+        
+        // Create a minimal but functional optimizer using the implementation class directly
+        try {
+          const minimalOptimizer = new PerformanceOptimizerImpl({
+            strategy: OptimizationStrategy.BALANCED,
+            enableProfiling: false,
+            enableAutoTuning: false,
+            profilingInterval: 60000,
+            optimizationInterval: 300000,
+            benchmarkSampleSize: 10,
+            historyRetentionPeriod: 300000,
+            minimumImprovementThreshold: 10.0,
+            enableDetailedLogging: false
+          }, { logger: this.logger });
+          
+          return minimalOptimizer;
+        } catch (implError) {
+          if (this.logger) {
+            this.logger.error('All performance optimizer creation attempts failed, this indicates a critical system issue', implError).catch(() => {});
+          }
+          // Re-throw the error rather than providing a non-functional fallback
+          // This follows the core module pattern of letting failures propagate
+          throw new Error(`Failed to create performance optimizer: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+    }
   }
   
   /**

@@ -376,16 +376,57 @@ describe('Stream Processing Module', () => {
   });
   
   describe('Integration with Core Modules', () => {
-    test('should create prime stream processor', () => {
-      const primeProcessor = instance.createPrimeStreamProcessor();
-      expect(primeProcessor).toBeDefined();
+    test('should throw error when creating prime stream processor without dependencies', () => {
+      expect(() => instance.createPrimeStreamProcessor()).toThrow('Prime registry is required for prime stream processing');
     });
     
-    test('should create encoding stream bridge', () => {
-      const encodingBridge = instance.createEncodingStreamBridge();
+    test('should create prime stream processor with dependencies', async () => {
+      // Create instance with mock prime registry
+      const mockPrimeRegistry = {
+        initialize: jest.fn().mockResolvedValue({ success: true }),
+        getState: jest.fn().mockReturnValue({ lifecycle: 'Ready' }),
+        factor: jest.fn().mockResolvedValue([{ prime: 2n, power: 1 }]),
+        isPrime: jest.fn().mockReturnValue(true),
+        getPrime: jest.fn().mockReturnValue(2n)
+      };
+      
+      const instanceWithDeps = createStream({
+        primeRegistry: mockPrimeRegistry as any
+      });
+      await instanceWithDeps.initialize();
+      
+      const primeProcessor = instanceWithDeps.createPrimeStreamProcessor();
+      expect(primeProcessor).toBeDefined();
+      
+      await instanceWithDeps.terminate();
+    });
+    
+    test('should throw error when creating encoding stream bridge without dependencies', () => {
+      expect(() => instance.createEncodingStreamBridge()).toThrow('Encoding module is required for encoding stream bridge');
+    });
+    
+    test('should create encoding stream bridge with dependencies', async () => {
+      // Create instance with mock encoding module
+      const mockEncodingModule = {
+        initialize: jest.fn().mockResolvedValue({ success: true }),
+        getState: jest.fn().mockReturnValue({ lifecycle: 'Ready' }),
+        encodeText: jest.fn().mockResolvedValue([1n, 2n, 3n]),
+        decodeText: jest.fn().mockResolvedValue('decoded text'),
+        decodeChunk: jest.fn().mockResolvedValue({ type: 'data', value: 'decoded' }),
+        executeProgram: jest.fn().mockResolvedValue(['output line 1', 'output line 2'])
+      };
+      
+      const instanceWithDeps = createStream({
+        encodingModule: mockEncodingModule as any
+      });
+      await instanceWithDeps.initialize();
+      
+      const encodingBridge = instanceWithDeps.createEncodingStreamBridge();
       expect(encodingBridge).toBeDefined();
       expect(typeof encodingBridge.encodeTextStream).toBe('function');
       expect(typeof encodingBridge.decodeTextStream).toBe('function');
+      
+      await instanceWithDeps.terminate();
     });
     
     test('should handle chunked stream creation', () => {

@@ -106,6 +106,36 @@ describe('Prime Stream Processor', () => {
   let options: PrimeStreamOptions;
   
   beforeEach(() => {
+    // Reset the mock to ensure clean state
+    jest.clearAllMocks();
+    
+    // Re-establish the factor mock implementation
+    mockPrimeRegistry.factor.mockImplementation((n: bigint): Factor[] => {
+      if (n === 60n) {
+        return [
+          { prime: 2n, exponent: 2 },
+          { prime: 3n, exponent: 1 },
+          { prime: 5n, exponent: 1 }
+        ];
+      }
+      if (n === 12n) {
+        return [
+          { prime: 2n, exponent: 2 },
+          { prime: 3n, exponent: 1 }
+        ];
+      }
+      if (n === 17n) {
+        return [{ prime: 17n, exponent: 1 }];
+      }
+      if (n === 19n) {
+        return [{ prime: 19n, exponent: 1 }];
+      }
+      if (n === 23n) {
+        return [{ prime: 23n, exponent: 1 }];
+      }
+      return [{ prime: n, exponent: 1 }];
+    });
+    
     options = {
       chunkSize: 1024,
       maxConcurrency: 4,

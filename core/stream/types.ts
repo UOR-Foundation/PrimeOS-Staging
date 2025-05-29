@@ -331,6 +331,9 @@ export interface MemoryStats {
   total: number;            // Total system memory
   bufferSize: number;       // Current buffer size
   gcCollections: number;    // Garbage collection count
+  rss?: number;             // Resident set size (Node.js)
+  external?: number;        // External memory (Node.js)
+  limit?: number;           // Memory limit (browser)
 }
 
 /**
