@@ -5,7 +5,8 @@
  * This module implements Axiom 2: Data carries self-verification via checksums.
  * Based on the UOR CPU implementation pattern with XOR-based checksums and 6th power attachment.
  * 
- * This implementation uses BigInt for unlimited precision arithmetic.
+ * Production implementation requiring proper core module integration.
+ * No fallbacks or simplifications - strict UOR compliance.
  */
 
 import {
@@ -81,91 +82,69 @@ class IntegrityCache {
 }
 
 /**
- * Mock prime registry for standalone operation with proper input validation
- * Will be replaced with actual prime registry integration
+ * Prime Registry Adapter for clean interface
  */
-class MockPrimeRegistry {
-  private primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n, 97n];
+class PrimeRegistryAdapter {
+  constructor(private registry: any) {}
+  
+  async ensureInitialized(): Promise<void> {
+    // Ensure the prime registry is initialized
+    if (typeof this.registry.initialize === 'function' && 
+        typeof this.registry.getState === 'function') {
+      const state = this.registry.getState();
+      if (state.lifecycle !== 'Ready') {
+        const result = await this.registry.initialize();
+        if (!result.success) {
+          throw new IntegrityError(`Failed to initialize prime registry: ${result.error}`);
+        }
+      }
+    }
+  }
   
   getPrime(index: number): bigint {
-    // Input validation
-    if (!Number.isInteger(index) || index < 0) {
-      throw new Error(`Invalid prime index: ${index}. Must be a non-negative integer.`);
+    if (typeof this.registry.getPrime !== 'function') {
+      throw new IntegrityError('Prime registry missing getPrime method');
     }
-    
-    if (index < this.primes.length) {
-      return this.primes[index];
-    }
-    // Simple approximation for larger indices
-    return BigInt(index * 2 + 1);
+    return this.registry.getPrime(index);
   }
   
   getIndex(prime: bigint): number {
-    // Input validation
-    if (typeof prime !== 'bigint' || prime <= 0n) {
-      throw new Error(`Invalid prime: ${prime}. Must be a positive BigInt.`);
+    if (typeof this.registry.getIndex !== 'function') {
+      throw new IntegrityError('Prime registry missing getIndex method');
     }
-    
-    const primeStr = prime.toString();
-    const index = this.primes.findIndex(p => p.toString() === primeStr);
-    if (index >= 0) return index;
-    // Simple approximation for primes not in table
-    return Number((prime - 1n) / 2n);
+    return this.registry.getIndex(prime);
   }
   
   factor(n: bigint): Factor[] {
-    // Input validation
-    if (typeof n !== 'bigint') {
-      throw new Error(`Invalid input: ${n}. Must be a BigInt.`);
+    if (typeof this.registry.factor !== 'function') {
+      throw new IntegrityError('Prime registry missing factor method');
     }
-    if (n <= 0n) {
-      throw new Error(`Cannot factor non-positive number: ${n}`);
-    }
-    if (n === 1n) {
-      return [];
-    }
-    
-    const factors: Factor[] = [];
-    let remaining = n;
-    
-    for (const prime of this.primes) {
-      let exponent = 0;
-      while (remaining % prime === 0n) {
-        exponent++;
-        remaining = remaining / prime;
-      }
-      if (exponent > 0) {
-        factors.push({ prime, exponent });
-      }
-      if (remaining === 1n) break;
-    }
-    
-    // Handle remaining prime factor
-    if (remaining > 1n) {
-      factors.push({ prime: remaining, exponent: 1 });
-    }
-    
-    return factors;
+    return this.registry.factor(n);
   }
 }
 
 /**
  * Default options for integrity module
  */
-const DEFAULT_OPTIONS: Required<Omit<IntegrityOptions, keyof import('../../os/model/types').ModelOptions>> = {
+const DEFAULT_OPTIONS: Required<Omit<IntegrityOptions, keyof import('../../os/model/types').ModelOptions | 'primeRegistry'>> = {
   checksumPower: 6,
   enableCache: true,
-  cacheSize: 1000,
-  primeRegistry: undefined
+  cacheSize: 1000
 };
 
 /**
- * Main implementation of integrity system
+ * Production implementation of integrity system
+ * Requires core/prime module - no fallbacks
  */
 export class IntegrityImplementation extends BaseModel implements IntegrityInterface {
-  private config: Required<Omit<IntegrityOptions, keyof import('../../os/model/types').ModelOptions>>;
+  private config: {
+    checksumPower: number;
+    enableCache: boolean;
+    cacheSize: number;
+    primeRegistry: any;
+  };
   private cache: IntegrityCache;
-  private mockRegistry: MockPrimeRegistry;
+  private primeAdapter: PrimeRegistryAdapter;
   private stats = {
     checksumsGenerated: 0,
     verificationsPerformed: 0,
@@ -183,26 +162,40 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
       ...options
     });
     
+    // Require prime registry - no fallbacks in production
+    if (!options.primeRegistry) {
+      throw new IntegrityError('Prime registry is required for production integrity module');
+    }
+    
     this.config = {
       checksumPower: options.checksumPower ?? DEFAULT_OPTIONS.checksumPower,
       enableCache: options.enableCache ?? DEFAULT_OPTIONS.enableCache,
       cacheSize: options.cacheSize ?? DEFAULT_OPTIONS.cacheSize,
-      primeRegistry: options.primeRegistry ?? DEFAULT_OPTIONS.primeRegistry
+      primeRegistry: options.primeRegistry
     };
     
     this.cache = new IntegrityCache(this.config.cacheSize);
-    this.mockRegistry = new MockPrimeRegistry();
+    this.primeAdapter = new PrimeRegistryAdapter(this.config.primeRegistry);
   }
   
   /**
    * Module-specific initialization logic
    */
   protected async onInitialize(): Promise<void> {
+    // Initialize prime registry - fail if it doesn't work
+    await this.primeAdapter.ensureInitialized();
+    
     this.state.custom = {
-      config: this.config,
+      config: {
+        checksumPower: this.config.checksumPower,
+        enableCache: this.config.enableCache,
+        cacheSize: this.config.cacheSize
+      },
       cache: this.cache.getStats(),
       stats: { ...this.stats }
     };
+    
+    await this.logger.info('Production integrity module initialized with prime registry');
     
     await this.logger.debug('Integrity module initialized', {
       checksumPower: this.config.checksumPower,
@@ -220,34 +213,33 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     }
     
     const request = input as unknown as IntegrityProcessInput;
-    const registry = request.primeRegistry || this.mockRegistry;
     
     await this.logger.debug('Processing integrity operation', { operation: request.operation });
     
     switch (request.operation) {
       case 'generateChecksum':
         if (!request.factors) throw new IntegrityError('Missing factors for checksum generation');
-        return await this.generateChecksum(request.factors, registry) as unknown as R;
+        return await this.generateChecksum(request.factors) as unknown as R;
         
       case 'attachChecksum':
         if (!request.value || !request.factors) throw new IntegrityError('Missing value or factors for checksum attachment');
-        return await this.attachChecksum(request.value, request.factors, registry) as unknown as R;
+        return await this.attachChecksum(request.value, request.factors) as unknown as R;
         
       case 'verifyIntegrity':
         if (!request.value) throw new IntegrityError('Missing value for integrity verification');
-        return await this.verifyIntegrity(request.value, registry) as unknown as R;
+        return await this.verifyIntegrity(request.value) as unknown as R;
         
       case 'extractChecksum':
         if (!request.value) throw new IntegrityError('Missing value for checksum extraction');
-        return await this.extractChecksum(request.value, registry) as unknown as R;
+        return await this.extractChecksum(request.value) as unknown as R;
         
       case 'calculateXorSum':
         if (!request.factors) throw new IntegrityError('Missing factors for XOR sum calculation');
-        return await this.calculateXorSum(request.factors, registry) as unknown as R;
+        return await this.calculateXorSum(request.factors) as unknown as R;
         
       case 'verifyBatch':
         if (!request.values) throw new IntegrityError('Missing values for batch verification');
-        return await this.verifyBatch(request.values, registry) as unknown as R;
+        return await this.verifyBatch(request.values) as unknown as R;
         
       default:
         throw new IntegrityError(`Unknown operation: ${(request as any).operation}`);
@@ -258,7 +250,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
    * Generate a checksum from prime factors using XOR pattern
    */
   async generateChecksum(factors: Factor[], primeRegistry?: any): Promise<bigint> {
-    const registry = primeRegistry || this.mockRegistry;
+    // Ignore optional primeRegistry parameter - we always use our required registry
     
     // Validate factors
     for (const factor of factors) {
@@ -278,10 +270,10 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     }
     
     // Calculate XOR sum
-    const xorSum = await this.calculateXorSum(factors, registry);
+    const xorSum = await this.calculateXorSum(factors);
     
     // Get checksum prime
-    const checksumPrime = registry.getPrime(xorSum);
+    const checksumPrime = this.primeAdapter.getPrime(xorSum);
     
     // Cache result
     if (this.config.enableCache) {
@@ -302,7 +294,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
    * Attach a checksum to a value as the 6th power of checksum prime
    */
   async attachChecksum(value: bigint, factors: Factor[], primeRegistry?: any): Promise<bigint> {
-    const checksum = await this.generateChecksum(factors, primeRegistry);
+    const checksum = await this.generateChecksum(factors);
     const power = BigInt(this.config.checksumPower);
     const result = value * (checksum ** power);
     
@@ -323,7 +315,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     this.stats.verificationsPerformed++;
     
     try {
-      const extraction = await this.extractChecksum(value, primeRegistry);
+      const extraction = await this.extractChecksum(value);
       
       if (!extraction.valid) {
         this.stats.integrityFailures++;
@@ -334,7 +326,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
       }
       
       // Verify the checksum matches expected
-      const expectedChecksum = await this.generateChecksum(extraction.coreFactors, primeRegistry);
+      const expectedChecksum = await this.generateChecksum(extraction.coreFactors);
       
       if (extraction.checksumPrime !== expectedChecksum) {
         this.stats.integrityFailures++;
@@ -375,11 +367,9 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
    * Extract checksum and core factors from a checksummed value
    */
   async extractChecksum(value: bigint, primeRegistry?: any): Promise<ChecksumExtraction> {
-    const registry = primeRegistry || this.mockRegistry;
-    
     try {
-      // Factor the value
-      const allFactors = registry.factor(value);
+      // Factor the value using production prime registry
+      const allFactors = this.primeAdapter.factor(value);
       
       // Find checksum (factor with exponent >= checksumPower)
       let checksumPrime: bigint | undefined;
@@ -441,11 +431,10 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
    * Calculate XOR sum for factors (used in checksum generation)
    */
   async calculateXorSum(factors: Factor[], primeRegistry?: any): Promise<number> {
-    const registry = primeRegistry || this.mockRegistry;
     let xor = 0;
     
     for (const factor of factors) {
-      const primeIndex = registry.getIndex(factor.prime);
+      const primeIndex = this.primeAdapter.getIndex(factor.prime);
       xor ^= primeIndex * factor.exponent;
     }
     
@@ -467,7 +456,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     
     for (let i = 0; i < values.length; i++) {
       try {
-        const result = await this.verifyIntegrity(values[i], primeRegistry);
+        const result = await this.verifyIntegrity(values[i]);
         results.push(result);
       } catch (error) {
         results.push({
@@ -502,7 +491,12 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     
     return {
       ...baseState,
-      config: this.config,
+      config: {
+        checksumPower: this.config.checksumPower,
+        enableCache: this.config.enableCache,
+        cacheSize: this.config.cacheSize,
+        primeRegistry: this.config.primeRegistry
+      },
       cache: this.cache.getStats(),
       stats: { ...this.stats }
     } as IntegrityState;
@@ -520,7 +514,11 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
     };
     
     this.state.custom = {
-      config: this.config,
+      config: {
+        checksumPower: this.config.checksumPower,
+        enableCache: this.config.enableCache,
+        cacheSize: this.config.cacheSize
+      },
       cache: this.cache.getStats(),
       stats: { ...this.stats }
     };
@@ -539,6 +537,7 @@ export class IntegrityImplementation extends BaseModel implements IntegrityInter
 
 /**
  * Create an integrity instance with the specified options
+ * Requires primeRegistry in production
  */
 export function createIntegrity(options: IntegrityOptions = {}): IntegrityInterface {
   return new IntegrityImplementation(options);
@@ -546,6 +545,7 @@ export function createIntegrity(options: IntegrityOptions = {}): IntegrityInterf
 
 /**
  * Create and initialize an integrity instance in a single step
+ * Requires primeRegistry in production
  */
 export async function createAndInitializeIntegrity(options: IntegrityOptions = {}): Promise<IntegrityInterface> {
   const instance = createIntegrity(options);

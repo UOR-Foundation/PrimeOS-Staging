@@ -7,19 +7,47 @@
  */
 
 import { EncodingStreamBridge } from '../types';
-import { DecodedChunk } from '../../encoding/core/types';
-import { EncodingInterface } from '../../encoding/core/types';
+import { 
+  DecodedChunk, 
+  EncodingInterface, 
+  ChunkType,
+  ChunkData,
+  EncodingError 
+} from '../../encoding/core/types';
+import { LoggingInterface } from '../../../os/logging/types';
+
+/**
+ * Statistics tracking for encoding operations
+ */
+interface EncodingStats {
+  textChunksEncoded: number;
+  textChunksDecoded: number;
+  chunksDecoded: number;
+  programsExecuted: number;
+  fallbacksUsed: number;
+  errors: number;
+  totalProcessingTime: number;
+}
 
 /**
  * Implementation of encoding stream bridge
  */
 export class EncodingStreamAdapter implements EncodingStreamBridge {
   private encodingModule?: EncodingInterface;
-  private logger?: any;
+  private logger?: LoggingInterface;
+  private stats: EncodingStats = {
+    textChunksEncoded: 0,
+    textChunksDecoded: 0,
+    chunksDecoded: 0,
+    programsExecuted: 0,
+    fallbacksUsed: 0,
+    errors: 0,
+    totalProcessingTime: 0
+  };
   
   constructor(dependencies: {
     encodingModule?: EncodingInterface;
-    logger?: any;
+    logger?: LoggingInterface;
   } = {}) {
     this.encodingModule = dependencies.encodingModule;
     this.logger = dependencies.logger;
@@ -29,37 +57,92 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
    * Stream text encoding - converts strings to prime-encoded chunks
    */
   async *encodeTextStream(text: AsyncIterable<string>): AsyncIterable<bigint> {
+    const startTime = performance.now();
+    
     try {
       for await (const str of text) {
-        if (this.encodingModule) {
-          // Use the actual encoding module
-          const chunks = await this.encodingModule.encodeText(str);
-          for (const chunk of chunks) {
-            yield chunk;
-          }
-        } else {
-          // Fallback encoding - convert string to BigInt
-          if (str.length > 0) {
-            const bytes = Buffer.from(str, 'utf8');
-            const hex = bytes.toString('hex');
-            yield BigInt('0x' + hex);
-          } else {
-            yield 0n;
-          }
-        }
+        const chunkStartTime = performance.now();
         
-        if (this.logger) {
-          await this.logger.debug('Encoded text chunk', { 
-            originalLength: str.length,
-            hasEncodingModule: !!this.encodingModule 
-          });
+        try {
+          if (this.encodingModule) {
+            // Use the actual encoding module
+            const chunks = await this.encodingModule.encodeText(str);
+            if (chunks !== undefined && chunks !== null) {
+              if (Array.isArray(chunks)) {
+                for (const chunk of chunks) {
+                  if (chunk !== undefined && chunk !== null) {
+                    yield chunk;
+                    this.stats.textChunksEncoded++;
+                  }
+                }
+              } else {
+                yield chunks;
+                this.stats.textChunksEncoded++;
+              }
+            } else {
+              // Fall back if encoding returns undefined
+              if (str.length > 0) {
+                const bytes = Buffer.from(str, 'utf8');
+                const hex = bytes.toString('hex');
+                yield BigInt('0x' + hex);
+                this.stats.fallbacksUsed++;
+                this.stats.textChunksEncoded++;
+              } else {
+                yield 0n;
+                this.stats.textChunksEncoded++;
+              }
+            }
+          } else {
+            // Fallback encoding - convert string to BigInt
+            if (str.length > 0) {
+              const bytes = Buffer.from(str, 'utf8');
+              const hex = bytes.toString('hex');
+              yield BigInt('0x' + hex);
+              this.stats.fallbacksUsed++;
+              this.stats.textChunksEncoded++;
+            } else {
+              yield 0n;
+              this.stats.textChunksEncoded++;
+            }
+          }
+          
+          const chunkTime = performance.now() - chunkStartTime;
+          this.stats.totalProcessingTime += chunkTime;
+          
+          if (this.logger) {
+            await this.logger.debug('Encoded text chunk', { 
+              originalLength: str.length,
+              hasEncodingModule: !!this.encodingModule,
+              processingTime: chunkTime
+            });
+          }
+        } catch (error) {
+          this.stats.errors++;
+          if (this.logger) {
+            await this.logger.error('Failed to encode text chunk', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              chunkLength: str.length
+            });
+          }
+          throw new EncodingError(`Failed to encode text chunk: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     } catch (error) {
+      this.stats.errors++;
       if (this.logger) {
         await this.logger.error('Text encoding stream failed', error);
       }
       throw error;
+    } finally {
+      const totalTime = performance.now() - startTime;
+      if (this.logger) {
+        await this.logger.info('Text encoding stream completed', {
+          chunksEncoded: this.stats.textChunksEncoded,
+          totalTime,
+          averageChunkTime: this.stats.textChunksEncoded > 0 ? 
+            this.stats.totalProcessingTime / this.stats.textChunksEncoded : 0
+        });
+      }
     }
   }
   
@@ -67,39 +150,83 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
    * Stream text decoding - converts prime-encoded chunks back to strings
    */
   async *decodeTextStream(chunks: AsyncIterable<bigint>): AsyncIterable<string> {
+    const startTime = performance.now();
+    
     try {
       for await (const chunk of chunks) {
-        if (this.encodingModule) {
-          // Use the actual encoding module
-          try {
-            const decoded = await this.encodingModule.decodeText([chunk]);
-            yield decoded;
-          } catch (error) {
-            if (this.logger) {
-              await this.logger.warn('Failed to decode chunk with encoding module, using fallback', {
-                chunk: chunk.toString().substring(0, 50) + '...'
-              });
-            }
-            // Fallback decoding
-            yield this.fallbackDecode(chunk);
-          }
-        } else {
-          // Fallback decoding
-          yield this.fallbackDecode(chunk);
-        }
+        const chunkStartTime = performance.now();
         
-        if (this.logger) {
-          await this.logger.debug('Decoded text chunk', { 
-            chunk: chunk.toString().substring(0, 50) + '...',
-            hasEncodingModule: !!this.encodingModule 
-          });
+        try {
+          let decoded: string;
+          
+          if (this.encodingModule) {
+            // Use the actual encoding module
+            try {
+              const result = await this.encodingModule.decodeText([chunk]);
+              if (result !== undefined && result !== null) {
+                decoded = result;
+                this.stats.textChunksDecoded++;
+              } else {
+                throw new Error('Decoding returned undefined');
+              }
+            } catch (error) {
+              if (this.logger) {
+                await this.logger.warn('Failed to decode chunk with encoding module, using fallback', {
+                  chunk: chunk.toString().substring(0, 50) + '...',
+                  error: error instanceof Error ? error.message : 'Unknown error'
+                });
+              }
+              // Fallback decoding
+              decoded = this.fallbackDecode(chunk);
+              this.stats.fallbacksUsed++;
+              this.stats.textChunksDecoded++;
+            }
+          } else {
+            // Fallback decoding
+            decoded = this.fallbackDecode(chunk);
+            this.stats.fallbacksUsed++;
+            this.stats.textChunksDecoded++;
+          }
+          
+          yield decoded;
+          
+          const chunkTime = performance.now() - chunkStartTime;
+          this.stats.totalProcessingTime += chunkTime;
+          
+          if (this.logger) {
+            await this.logger.debug('Decoded text chunk', { 
+              chunk: chunk.toString().substring(0, 50) + '...',
+              hasEncodingModule: !!this.encodingModule,
+              processingTime: chunkTime
+            });
+          }
+        } catch (error) {
+          this.stats.errors++;
+          if (this.logger) {
+            await this.logger.error('Failed to decode text chunk', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              chunk: chunk.toString().substring(0, 50) + '...'
+            });
+          }
+          throw new EncodingError(`Failed to decode text chunk: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     } catch (error) {
+      this.stats.errors++;
       if (this.logger) {
         await this.logger.error('Text decoding stream failed', error);
       }
       throw error;
+    } finally {
+      const totalTime = performance.now() - startTime;
+      if (this.logger) {
+        await this.logger.info('Text decoding stream completed', {
+          chunksDecoded: this.stats.textChunksDecoded,
+          totalTime,
+          averageChunkTime: this.stats.textChunksDecoded > 0 ? 
+            this.stats.totalProcessingTime / this.stats.textChunksDecoded : 0
+        });
+      }
     }
   }
   
@@ -107,39 +234,84 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
    * Stream chunk decoding - converts chunks to structured data
    */
   async *decodeChunkStream(chunks: AsyncIterable<bigint>): AsyncIterable<DecodedChunk> {
+    const startTime = performance.now();
+    
     try {
       for await (const chunk of chunks) {
-        if (this.encodingModule) {
-          // Use the actual encoding module
-          try {
-            const decoded = await this.encodingModule.decodeChunk(chunk);
-            yield decoded;
-          } catch (error) {
-            if (this.logger) {
-              await this.logger.warn('Failed to decode chunk structure, using fallback', {
-                chunk: chunk.toString().substring(0, 50) + '...'
-              });
-            }
-            // Fallback - create a basic decoded chunk
-            yield this.createFallbackDecodedChunk(chunk);
-          }
-        } else {
-          // Fallback - create a basic decoded chunk
-          yield this.createFallbackDecodedChunk(chunk);
-        }
+        const chunkStartTime = performance.now();
         
-        if (this.logger) {
-          await this.logger.debug('Decoded chunk structure', { 
-            chunk: chunk.toString().substring(0, 50) + '...',
-            hasEncodingModule: !!this.encodingModule 
-          });
+        try {
+          let decoded: DecodedChunk;
+          
+          if (this.encodingModule) {
+            // Use the actual encoding module
+            try {
+              const result = await this.encodingModule.decodeChunk(chunk);
+              if (result !== undefined && result !== null) {
+                decoded = result;
+                this.stats.chunksDecoded++;
+              } else {
+                throw new Error('Decoding returned undefined');
+              }
+            } catch (error) {
+              if (this.logger) {
+                await this.logger.warn('Failed to decode chunk structure, using fallback', {
+                  chunk: chunk.toString().substring(0, 50) + '...',
+                  error: error instanceof Error ? error.message : 'Unknown error'
+                });
+              }
+              // Fallback - create a basic decoded chunk
+              decoded = this.createFallbackDecodedChunk(chunk);
+              this.stats.fallbacksUsed++;
+              this.stats.chunksDecoded++;
+            }
+          } else {
+            // Fallback - create a basic decoded chunk
+            decoded = this.createFallbackDecodedChunk(chunk);
+            this.stats.fallbacksUsed++;
+            this.stats.chunksDecoded++;
+          }
+          
+          yield decoded;
+          
+          const chunkTime = performance.now() - chunkStartTime;
+          this.stats.totalProcessingTime += chunkTime;
+          
+          if (this.logger) {
+            await this.logger.debug('Decoded chunk structure', { 
+              chunk: chunk.toString().substring(0, 50) + '...',
+              type: decoded.type,
+              hasEncodingModule: !!this.encodingModule,
+              processingTime: chunkTime
+            });
+          }
+        } catch (error) {
+          this.stats.errors++;
+          if (this.logger) {
+            await this.logger.error('Failed to decode chunk structure', {
+              error: error instanceof Error ? error.message : 'Unknown error',
+              chunk: chunk.toString().substring(0, 50) + '...'
+            });
+          }
+          throw new EncodingError(`Failed to decode chunk structure: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
     } catch (error) {
+      this.stats.errors++;
       if (this.logger) {
         await this.logger.error('Chunk decoding stream failed', error);
       }
       throw error;
+    } finally {
+      const totalTime = performance.now() - startTime;
+      if (this.logger) {
+        await this.logger.info('Chunk decoding stream completed', {
+          chunksDecoded: this.stats.chunksDecoded,
+          totalTime,
+          averageChunkTime: this.stats.chunksDecoded > 0 ? 
+            this.stats.totalProcessingTime / this.stats.chunksDecoded : 0
+        });
+      }
     }
   }
   
@@ -147,37 +319,58 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
    * Stream program execution - executes encoded programs
    */
   async *executeStreamingProgram(chunks: AsyncIterable<bigint>): AsyncIterable<string> {
+    const startTime = performance.now();
+    const programChunks: bigint[] = [];
+    
     try {
+      // Collect all chunks first (programs need complete chunk set)
       for await (const chunk of chunks) {
-        if (this.encodingModule) {
-          // Use the actual encoding module
-          try {
-            const result = await this.encodingModule.executeProgram([chunk]);
-            for (const output of result) {
-              yield output;
-            }
-          } catch (error) {
-            if (this.logger) {
-              await this.logger.warn('Failed to execute program chunk, using fallback', {
-                chunk: chunk.toString().substring(0, 50) + '...'
-              });
-            }
-            // Fallback execution
+        programChunks.push(chunk);
+      }
+      
+      if (this.encodingModule) {
+        // Use the actual encoding module
+        try {
+          const result = await this.encodingModule.executeProgram(programChunks);
+          for (const output of result) {
+            yield output;
+          }
+          this.stats.programsExecuted++;
+        } catch (error) {
+          if (this.logger) {
+            await this.logger.warn('Failed to execute program, using fallback', {
+              chunkCount: programChunks.length,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            });
+          }
+          // Fallback execution
+          for (const chunk of programChunks) {
             yield `Executed chunk: ${chunk.toString()}`;
           }
-        } else {
-          // Fallback execution
+          this.stats.fallbacksUsed++;
+          this.stats.programsExecuted++;
+        }
+      } else {
+        // Fallback execution
+        for (const chunk of programChunks) {
           yield `Executed chunk: ${chunk.toString()}`;
         }
-        
-        if (this.logger) {
-          await this.logger.debug('Executed program chunk', { 
-            chunk: chunk.toString().substring(0, 50) + '...',
-            hasEncodingModule: !!this.encodingModule 
-          });
-        }
+        this.stats.fallbacksUsed++;
+        this.stats.programsExecuted++;
+      }
+      
+      const totalTime = performance.now() - startTime;
+      this.stats.totalProcessingTime += totalTime;
+      
+      if (this.logger) {
+        await this.logger.debug('Executed program', { 
+          chunkCount: programChunks.length,
+          hasEncodingModule: !!this.encodingModule,
+          executionTime: totalTime
+        });
       }
     } catch (error) {
+      this.stats.errors++;
       if (this.logger) {
         await this.logger.error('Program execution stream failed', error);
       }
@@ -192,9 +385,12 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
     this.encodingModule = encodingModule;
     
     if (this.logger) {
-      this.logger.info('Encoding stream adapter configured', {
+      const logPromise = this.logger.info('Encoding stream adapter configured', {
         hasEncodingModule: !!this.encodingModule
-      }).catch(() => {});
+      });
+      if (logPromise && typeof logPromise.catch === 'function') {
+        logPromise.catch(() => {});
+      }
     }
   }
   
@@ -208,8 +404,30 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
   /**
    * Set logger for debugging
    */
-  setLogger(logger: any): void {
+  setLogger(logger: LoggingInterface): void {
     this.logger = logger;
+  }
+  
+  /**
+   * Get adapter statistics
+   */
+  getStats(): Readonly<EncodingStats> {
+    return { ...this.stats };
+  }
+  
+  /**
+   * Reset statistics
+   */
+  resetStats(): void {
+    this.stats = {
+      textChunksEncoded: 0,
+      textChunksDecoded: 0,
+      chunksDecoded: 0,
+      programsExecuted: 0,
+      fallbacksUsed: 0,
+      errors: 0,
+      totalProcessingTime: 0
+    };
   }
   
   /**
@@ -218,11 +436,8 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
   private fallbackDecode(chunk: bigint): string {
     try {
       const hex = chunk.toString(16);
-      if (hex.length % 2 === 0) {
-        return Buffer.from(hex, 'hex').toString('utf8');
-      } else {
-        return Buffer.from('0' + hex, 'hex').toString('utf8');
-      }
+      const paddedHex = hex.length % 2 === 0 ? hex : '0' + hex;
+      return Buffer.from(paddedHex, 'hex').toString('utf8');
     } catch (error) {
       // If decoding fails, return a representation of the chunk
       return `[CHUNK:${chunk.toString().substring(0, 20)}...]`;
@@ -233,13 +448,19 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
    * Create a fallback decoded chunk when encoding module is not available
    */
   private createFallbackDecodedChunk(chunk: bigint): DecodedChunk {
+    // Extract a simple checksum (last 16 bits)
+    const checksum = chunk & 0xFFFFn;
+    
+    // Create proper ChunkData structure
+    const data: ChunkData = {
+      value: Number(chunk % BigInt(Number.MAX_SAFE_INTEGER)),
+      position: 0
+    };
+    
     return {
-      type: 'data' as any, // Would need proper ChunkType
-      checksum: 0n,
-      data: {
-        value: Number(chunk % BigInt(Number.MAX_SAFE_INTEGER)),
-        position: 0
-      }
+      type: ChunkType.DATA,
+      checksum,
+      data
     };
   }
 }
@@ -249,7 +470,7 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
  */
 export function createEncodingStreamAdapter(dependencies: {
   encodingModule?: EncodingInterface;
-  logger?: any;
+  logger?: LoggingInterface;
 } = {}): EncodingStreamBridge {
   return new EncodingStreamAdapter(dependencies);
 }
@@ -258,13 +479,51 @@ export function createEncodingStreamAdapter(dependencies: {
  * Create an encoding stream adapter with automatic encoding module detection
  */
 export async function createAutoEncodingStreamAdapter(dependencies: {
-  logger?: any;
+  logger?: LoggingInterface;
+  autoLoadModule?: boolean;
+  primeRegistry?: any;
+  integrityModule?: any;
 } = {}): Promise<EncodingStreamBridge> {
   const adapter = new EncodingStreamAdapter(dependencies);
   
-  // Could attempt to auto-detect or load encoding module here
+  if (dependencies.autoLoadModule && dependencies.primeRegistry && dependencies.integrityModule) {
+    // Attempt to dynamically load encoding module
+    try {
+      const encodingModule = await import('../../encoding');
+      if (encodingModule.createAndInitializeEncoding) {
+        // Create and initialize the encoding module with provided dependencies
+        const encoding = await encodingModule.createAndInitializeEncoding({
+          primeRegistry: dependencies.primeRegistry,
+          integrityModule: dependencies.integrityModule
+        });
+        adapter.configure(encoding);
+        if (dependencies.logger) {
+          await dependencies.logger.info('Auto-configured encoding stream adapter with loaded module');
+        }
+      }
+    } catch (error) {
+      if (dependencies.logger) {
+        await dependencies.logger.warn('Failed to auto-load encoding module', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          note: 'Encoding module initialization failed'
+        });
+      }
+    }
+  } else if (dependencies.autoLoadModule) {
+    if (dependencies.logger) {
+      await dependencies.logger.warn('Cannot auto-load encoding module', {
+        reason: 'Missing required dependencies',
+        hasPrimeRegistry: !!dependencies.primeRegistry,
+        hasIntegrityModule: !!dependencies.integrityModule
+      });
+    }
+  }
+  
   if (dependencies.logger) {
-    await dependencies.logger.info('Auto-configured encoding stream adapter');
+    await dependencies.logger.info('Created encoding stream adapter', {
+      autoLoadAttempted: dependencies.autoLoadModule ?? false,
+      hasEncodingModule: !!adapter.getEncodingModule()
+    });
   }
   
   return adapter;

@@ -46,8 +46,12 @@ jest.mock('../../os/model', () => ({
     }
 
     async initialize() {
-      await this.onInitialize();
-      return { success: true, data: undefined, timestamp: Date.now(), source: this.options.name };
+      try {
+        await this.onInitialize();
+        return { success: true, data: undefined, timestamp: Date.now(), source: this.options.name };
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error', timestamp: Date.now(), source: this.options.name };
+      }
     }
 
     async process(input: any) {
@@ -92,16 +96,92 @@ jest.mock('../../os/model', () => ({
   }
 }));
 
+// Create a mock prime registry for testing
+class MockPrimeRegistry {
+  private primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n, 43n, 47n, 53n, 59n, 61n, 67n, 71n, 73n, 79n, 83n, 89n, 97n];
+  
+  // Mock the model interface
+  async initialize() {
+    return { success: true, data: undefined, timestamp: Date.now(), source: 'mock-prime-registry' };
+  }
+  
+  getState() {
+    return { lifecycle: 'Ready' };
+  }
+  
+  getPrime(index: number): bigint {
+    if (!Number.isInteger(index) || index < 0) {
+      throw new Error(`Invalid prime index: ${index}. Must be a non-negative integer.`);
+    }
+    
+    if (index < this.primes.length) {
+      return this.primes[index];
+    }
+    // Simple approximation for larger indices
+    return BigInt(index * 2 + 1);
+  }
+  
+  getIndex(prime: bigint): number {
+    if (typeof prime !== 'bigint' || prime <= 0n) {
+      throw new Error(`Invalid prime: ${prime}. Must be a positive BigInt.`);
+    }
+    
+    const primeStr = prime.toString();
+    const index = this.primes.findIndex(p => p.toString() === primeStr);
+    if (index >= 0) return index;
+    // Simple approximation for primes not in table
+    return Number((prime - 1n) / 2n);
+  }
+  
+  factor(n: bigint): Factor[] {
+    if (typeof n !== 'bigint') {
+      throw new Error(`Invalid input: ${n}. Must be a BigInt.`);
+    }
+    if (n <= 0n) {
+      throw new Error(`Cannot factor non-positive number: ${n}`);
+    }
+    if (n === 1n) {
+      return [];
+    }
+    
+    const factors: Factor[] = [];
+    let remaining = n;
+    
+    for (const prime of this.primes) {
+      let exponent = 0;
+      while (remaining % prime === 0n) {
+        exponent++;
+        remaining = remaining / prime;
+      }
+      if (exponent > 0) {
+        factors.push({ prime, exponent });
+      }
+      if (remaining === 1n) break;
+    }
+    
+    // Handle remaining prime factor
+    if (remaining > 1n) {
+      factors.push({ prime: remaining, exponent: 1 });
+    }
+    
+    return factors;
+  }
+}
+
 describe('Integrity Module', () => {
   let instance: IntegrityInterface;
+  let mockPrimeRegistry: MockPrimeRegistry;
   
   beforeEach(async () => {
+    mockPrimeRegistry = new MockPrimeRegistry();
+    
     instance = createIntegrity({
       debug: true,
       name: 'test-integrity',
       checksumPower: 6,
       enableCache: true,
-      cacheSize: 100
+      cacheSize: 100,
+      primeRegistry: mockPrimeRegistry
     });
     
     await instance.initialize();
@@ -109,6 +189,34 @@ describe('Integrity Module', () => {
   
   afterEach(async () => {
     await instance.terminate();
+  });
+  
+  describe('Production Requirements', () => {
+    test('should require prime registry in production', () => {
+      expect(() => {
+        createIntegrity({
+          debug: true,
+          name: 'test-no-registry'
+          // Missing primeRegistry
+        });
+      }).toThrow('Prime registry is required for production integrity module');
+    });
+    
+    test('should validate prime registry interface', async () => {
+      const invalidRegistry = {}; // Missing required methods
+      
+      const badInstance = createIntegrity({
+        primeRegistry: invalidRegistry
+      });
+      
+      // Initialize succeeds but usage fails
+      const initResult = await badInstance.initialize();
+      expect(initResult.success).toBe(true);
+      
+      // Should fail when trying to use registry methods
+      const factors: Factor[] = [{ prime: 2n, exponent: 1 }];
+      await expect(badInstance.generateChecksum(factors)).rejects.toThrow('Prime registry missing');
+    });
   });
   
   describe('Lifecycle Management', () => {
@@ -412,20 +520,17 @@ describe('Integrity Module', () => {
   });
   
   describe('Configuration Options', () => {
-    test('should use default options when none provided', async () => {
-      const defaultInstance = createIntegrity();
-      await defaultInstance.initialize();
-      
-      const state = defaultInstance.getState() as IntegrityState;
-      expect(state.config.checksumPower).toBe(6);
-      expect(state.config.enableCache).toBe(true);
-      expect(state.config.cacheSize).toBe(1000);
-      
-      await defaultInstance.terminate();
+    test('should require prime registry', () => {
+      expect(() => {
+        createIntegrity(); // No options, no prime registry
+      }).toThrow('Prime registry is required for production integrity module');
     });
     
     test('should respect custom checksum power', async () => {
-      const customInstance = createIntegrity({ checksumPower: 8 });
+      const customInstance = createIntegrity({ 
+        checksumPower: 8,
+        primeRegistry: mockPrimeRegistry
+      });
       await customInstance.initialize();
       
       const state = customInstance.getState() as IntegrityState;
@@ -435,7 +540,10 @@ describe('Integrity Module', () => {
     });
     
     test('should work with caching disabled', async () => {
-      const noCacheInstance = createIntegrity({ enableCache: false });
+      const noCacheInstance = createIntegrity({ 
+        enableCache: false,
+        primeRegistry: mockPrimeRegistry
+      });
       await noCacheInstance.initialize();
       
       const factors: Factor[] = [{ prime: 2n, exponent: 1 }];
@@ -524,7 +632,8 @@ describe('Integrity Module', () => {
     test('createAndInitializeIntegrity should work', async () => {
       const testInstance = await createAndInitializeIntegrity({
         debug: true,
-        name: 'factory-test'
+        name: 'factory-test',
+        primeRegistry: mockPrimeRegistry
       });
       
       expect(testInstance).toBeDefined();
@@ -535,8 +644,15 @@ describe('Integrity Module', () => {
     });
     
     test('should handle initialization failure', async () => {
-      // Skip this complex mocking test for now - the main functionality works
-      expect(true).toBe(true);
+      // Create registry that fails to initialize
+      const failingRegistry = {
+        initialize: jest.fn().mockResolvedValue({ success: false, error: 'Init failed' }),
+        getState: jest.fn().mockReturnValue({ lifecycle: 'Error' })
+      };
+      
+      await expect(createAndInitializeIntegrity({
+        primeRegistry: failingRegistry
+      })).rejects.toThrow('Failed to initialize prime registry: Init failed');
     });
   });
   

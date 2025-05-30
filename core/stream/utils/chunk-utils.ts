@@ -281,10 +281,10 @@ export function calculateChunkStats<T>(
   const sortedTimes = [...processingTimes].sort((a, b) => a - b);
   const minProcessingTime = sortedTimes[0] || 0;
   const maxProcessingTime = sortedTimes[sortedTimes.length - 1] || 0;
-  const p95Index = Math.floor(sortedTimes.length * 0.95);
-  const p99Index = Math.floor(sortedTimes.length * 0.99);
-  const p95ProcessingTime = sortedTimes[p95Index] || maxProcessingTime;
-  const p99ProcessingTime = sortedTimes[p99Index] || maxProcessingTime;
+  const p95Index = Math.floor(sortedTimes.length * 0.95) - 1;
+  const p99Index = Math.floor(sortedTimes.length * 0.99) - 1;
+  const p95ProcessingTime = sortedTimes[Math.max(0, p95Index)] || maxProcessingTime;
+  const p99ProcessingTime = sortedTimes[Math.max(0, p99Index)] || maxProcessingTime;
   
   return {
     totalItems,
@@ -378,11 +378,14 @@ export function chunkArrayWithOverlap<T>(
   const chunks: T[][] = [];
   const step = chunkSize - overlap;
   
-  for (let i = 0; i < array.length; i += step) {
-    const chunk = array.slice(i, i + chunkSize);
-    if (chunk.length === chunkSize || i + chunk.length === array.length) {
-      chunks.push(chunk);
-    }
+  for (let i = 0; i <= array.length - chunkSize; i += step) {
+    chunks.push(array.slice(i, i + chunkSize));
+  }
+  
+  // Handle the last chunk if there's remaining data and it's the final chunk
+  const lastIndex = chunks.length * step;
+  if (lastIndex < array.length && array.length - lastIndex > overlap) {
+    chunks.push(array.slice(lastIndex));
   }
   
   return chunks;

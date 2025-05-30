@@ -240,33 +240,112 @@ class AdvancedStream<T> implements Stream<T> {
   }
   
   private async *parallelAsyncIterable(concurrency: number): AsyncIterable<T> {
-    // For production use, implement true parallel processing with worker pools
-    // For now, process with controlled concurrency using batching
-    const items: T[] = [];
+    // True parallel processing with controlled concurrency
+    const processingQueue: Array<{
+      item: T;
+      resolve: (value: T) => void;
+      reject: (error: Error) => void;
+    }> = [];
     
-    // Collect items first
-    for await (const item of this.source) {
-      items.push(item);
-    }
+    const results = new Map<number, T>();
+    let inputIndex = 0;
+    let outputIndex = 0;
+    let inputDone = false;
+    let activeWorkers = 0;
     
-    // Process in concurrent batches
-    for (let i = 0; i < items.length; i += concurrency) {
-      const batch = items.slice(i, i + concurrency);
-      
-      // Process batch concurrently
-      const promises = batch.map(async (item) => {
+    // Worker function that processes items from the queue
+    const worker = async (): Promise<void> => {
+      while (processingQueue.length > 0 || !inputDone) {
+        // Wait if paused
         while (this.paused) {
           await new Promise(resolve => setTimeout(resolve, 10));
         }
-        return item;
-      });
+        
+        // Get next item from queue
+        const work = processingQueue.shift();
+        if (!work) {
+          if (inputDone) break;
+          // Wait for more items
+          await new Promise(resolve => setTimeout(resolve, 1));
+          continue;
+        }
+        
+        try {
+          // Process the item (in real worker pools, this would be in a separate thread)
+          const processed = await this.processItem(work.item);
+          work.resolve(processed);
+        } catch (error) {
+          work.reject(error as Error);
+        }
+      }
       
-      const results = await Promise.all(promises);
+      activeWorkers--;
+    };
+    
+    // Start worker pool
+    const workers: Promise<void>[] = [];
+    for (let i = 0; i < concurrency; i++) {
+      activeWorkers++;
+      workers.push(worker());
+    }
+    
+    // Input handler - reads from source and queues items
+    const inputHandler = async () => {
+      try {
+        for await (const item of this.source) {
+          const index = inputIndex++;
+          
+          // Create promise for this item's processing
+          const itemPromise = new Promise<T>((resolve, reject) => {
+            processingQueue.push({ item, resolve, reject });
+          });
+          
+          // Store the result when ready
+          itemPromise.then(result => {
+            results.set(index, result);
+          }).catch(() => {
+            // Error handling is done elsewhere
+          });
+          
+          // Apply backpressure if queue is too large
+          while (processingQueue.length > concurrency * 2) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+      } finally {
+        inputDone = true;
+      }
+    };
+    
+    // Start input handling
+    inputHandler();
+    
+    // Yield results in order
+    while (outputIndex < inputIndex || !inputDone) {
+      // Wait for the next result in sequence
+      while (!results.has(outputIndex) && (outputIndex < inputIndex || !inputDone)) {
+        await new Promise(resolve => setTimeout(resolve, 1));
+      }
       
-      for (const result of results) {
-        yield result;
+      if (results.has(outputIndex)) {
+        yield results.get(outputIndex)!;
+        results.delete(outputIndex);
+        outputIndex++;
       }
     }
+    
+    // Wait for all workers to complete
+    await Promise.all(workers);
+  }
+  
+  // Helper method to process individual items (can be overridden for custom processing)
+  private async processItem(item: T): Promise<T> {
+    // In a real implementation, this could involve:
+    // - Serialization for worker thread communication
+    // - Custom transformation logic
+    // - Resource-intensive computations
+    // For now, return the item as-is (identity function)
+    return item;
   }
   
   private async *concatAsyncIterable(other: Stream<T>): AsyncIterable<T> {
@@ -392,24 +471,25 @@ export function transformStreamAsync<T, U>(
   const { concurrency = 4, retryAttempts = 3 } = options;
   
   const transformedIterable = async function* (): AsyncIterable<U> {
-    const workers: Promise<{ index: number; result: U }>[] = [];
+    // Track workers with a Map for easier removal
+    const activeWorkers = new Map<symbol, Promise<{ index: number; result: U; workerId: symbol }>>();
     const results = new Map<number, U>();
     let nextIndex = 0;
     let outputIndex = 0;
     
     // Helper to process an item with retry logic
-    const processWithRetry = async (item: T, index: number): Promise<{ index: number; result: U }> => {
+    const processWithRetry = async (item: T, index: number, workerId: symbol): Promise<{ index: number; result: U; workerId: symbol }> => {
       let lastError: Error | undefined;
       
       for (let attempt = 0; attempt <= retryAttempts; attempt++) {
         try {
           const result = await transform(item);
-          return { index, result };
+          return { index, result, workerId };
         } catch (error) {
           lastError = error as Error;
           if (attempt < retryAttempts) {
             // Exponential backoff
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 10));
           }
         }
       }
@@ -424,16 +504,15 @@ export function transformStreamAsync<T, U>(
     // Process stream items
     for await (const item of stream) {
       // Start processing if we have capacity
-      if (workers.length < concurrency) {
-        workers.push(processWithRetry(item, nextIndex++));
+      if (activeWorkers.size < concurrency) {
+        const workerId = Symbol('worker');
+        activeWorkers.set(workerId, processWithRetry(item, nextIndex++, workerId));
       } else {
         // Wait for a worker to complete
-        const completed = await Promise.race(workers);
-        const workerIndex = workers.findIndex(async w => {
-          const resolved = await w;
-          return resolved.index === completed.index;
-        });
-        workers.splice(workerIndex, 1);
+        const completed = await Promise.race(activeWorkers.values());
+        
+        // Remove the completed worker
+        activeWorkers.delete(completed.workerId);
         
         results.set(completed.index, completed.result);
         
@@ -445,18 +524,17 @@ export function transformStreamAsync<T, U>(
         }
         
         // Start processing the new item
-        workers.push(processWithRetry(item, nextIndex++));
+        const workerId = Symbol('worker');
+        activeWorkers.set(workerId, processWithRetry(item, nextIndex++, workerId));
       }
     }
     
     // Process remaining workers
-    while (workers.length > 0) {
-      const completed = await Promise.race(workers);
-      const workerIndex = workers.findIndex(async w => {
-        const resolved = await w;
-        return resolved.index === completed.index;
-      });
-      workers.splice(workerIndex, 1);
+    while (activeWorkers.size > 0) {
+      const completed = await Promise.race(activeWorkers.values());
+      
+      // Remove the completed worker
+      activeWorkers.delete(completed.workerId);
       
       results.set(completed.index, completed.result);
       
@@ -642,19 +720,25 @@ export function debounce<T>(stream: Stream<T>, delayMs: number): Stream<T> {
     
     // Yield debounced items
     try {
-      while (true) {
+      let streamDone = false;
+      while (!streamDone) {
         if (emitPromise) {
           const item = await emitPromise;
           yield item;
         } else {
           // Check if stream is done
-          await Promise.race([
-            streamPromise,
-            new Promise(resolve => setTimeout(resolve, 10))
+          const raceResult = await Promise.race([
+            streamPromise.then(() => 'done'),
+            new Promise(resolve => setTimeout(resolve, 10)).then(() => 'timeout')
           ]);
           
-          if (!emitPromise) {
-            break;
+          if (raceResult === 'done') {
+            streamDone = true;
+            // Wait for any final emit
+            if (emitPromise) {
+              const finalItem = await emitPromise;
+              yield finalItem;
+            }
           }
         }
       }

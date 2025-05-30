@@ -657,9 +657,9 @@ export class IntegrityAdapter {
       return scoreB - scoreA;
     });
     
-    // Remove 25% of entries
-    const removeCount = Math.floor(this.cache.size * 0.25);
-    for (let i = 0; i < removeCount; i++) {
+    // Remove 25% of entries (at least 1)
+    const removeCount = Math.max(1, Math.floor(this.cache.size * 0.25));
+    for (let i = 0; i < removeCount && i < entries.length; i++) {
       this.cache.delete(entries[i][0]);
     }
   }

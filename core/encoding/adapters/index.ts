@@ -183,6 +183,10 @@ export class AdapterLoadBalancer {
    * Get the next adapter suite based on load balancing strategy
    */
   getNext(): AdapterSuite {
+    if (this.suites.length === 0) {
+      throw new Error('No adapter suites available');
+    }
+    
     switch (this.strategy) {
       case 'round-robin':
         const suite = this.suites[this.currentIndex];
@@ -201,7 +205,10 @@ export class AdapterLoadBalancer {
         return this.suites[Math.floor(Math.random() * this.suites.length)];
         
       default:
-        return this.suites[0];
+        // Default to round-robin for invalid strategies
+        const defaultSuite = this.suites[this.currentIndex];
+        this.currentIndex = (this.currentIndex + 1) % this.suites.length;
+        return defaultSuite;
     }
   }
   
@@ -216,23 +223,55 @@ export class AdapterLoadBalancer {
    * Get combined statistics from all suites
    */
   getCombinedStats(): AdapterStats {
-    const allStats = this.suites.map(suite => suite.getStats().combined);
+    const allStats = this.suites.map(suite => suite.getStats());
     
-    return allStats.reduce((combined, stats) => ({
-      totalOperations: combined.totalOperations + stats.totalOperations,
-      successfulOperations: combined.successfulOperations + stats.successfulOperations,
-      failedOperations: combined.failedOperations + stats.failedOperations,
-      averageResponseTime: (combined.averageResponseTime + stats.averageResponseTime) / 2,
-      cacheHitRate: (combined.cacheHitRate + stats.cacheHitRate) / 2,
-      uptime: Math.min(combined.uptime, stats.uptime)
-    }), {
-      totalOperations: 0,
-      successfulOperations: 0,
-      failedOperations: 0,
-      averageResponseTime: 0,
-      cacheHitRate: 0,
-      uptime: Date.now()
-    });
+    // Aggregate raw metrics for accurate calculation
+    let totalOperations = 0;
+    let successfulOperations = 0;
+    let failedOperations = 0;
+    let totalResponseTime = 0;
+    let totalCacheHits = 0;
+    let totalCacheAccesses = 0;
+    let minUptime = Date.now();
+    
+    for (const stats of allStats) {
+      const primeOps = stats.prime.totalOperations;
+      const integrityOps = stats.integrity.totalOperations;
+      const combinedOps = primeOps + integrityOps;
+      
+      totalOperations += combinedOps;
+      successfulOperations += stats.prime.successfulOperations + stats.integrity.successfulOperations;
+      failedOperations += stats.prime.failedOperations + stats.integrity.failedOperations;
+      
+      // Calculate weighted response time
+      totalResponseTime += stats.prime.averageResponseTime * primeOps + 
+                          stats.integrity.averageResponseTime * integrityOps;
+      
+      // Aggregate cache statistics
+      const primeCacheAccesses = (stats.prime.cacheHitRate > 0 || primeOps > 0) ? primeOps : 0;
+      const integrityCacheAccesses = (stats.integrity.cacheHitRate > 0 || integrityOps > 0) ? integrityOps : 0;
+      
+      if (primeCacheAccesses > 0) {
+        totalCacheHits += Math.round(stats.prime.cacheHitRate * primeCacheAccesses);
+        totalCacheAccesses += primeCacheAccesses;
+      }
+      
+      if (integrityCacheAccesses > 0) {
+        totalCacheHits += Math.round(stats.integrity.cacheHitRate * integrityCacheAccesses);
+        totalCacheAccesses += integrityCacheAccesses;
+      }
+      
+      minUptime = Math.min(minUptime, stats.prime.uptime, stats.integrity.uptime);
+    }
+    
+    return {
+      totalOperations,
+      successfulOperations,
+      failedOperations,
+      averageResponseTime: totalOperations > 0 ? totalResponseTime / totalOperations : 0,
+      cacheHitRate: totalCacheAccesses > 0 ? totalCacheHits / totalCacheAccesses : 0,
+      uptime: minUptime
+    };
   }
   
   /**

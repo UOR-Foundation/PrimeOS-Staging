@@ -202,6 +202,7 @@ export class MemoryMonitor {
   
   constructor(maxSamples: number = 100) {
     this.maxSamples = maxSamples;
+    this.startTime = Date.now();
     this.setupGcTracking();
   }
   
@@ -271,8 +272,8 @@ export class MemoryMonitor {
       }
       
       // Detect GC events by sudden memory drops
-      if (this.samples.length > 1) {
-        const lastSample = this.samples[this.samples.length - 2];
+      if (this.samples.length > 0) {
+        const lastSample = this.samples[this.samples.length - 1];
         const currentSample = stats.used;
         const drop = lastSample - currentSample;
         
@@ -303,6 +304,28 @@ export class MemoryMonitor {
   }
   
   addSample(usage: number): void {
+    // Check for GC before adding the new sample
+    if (this.samples.length > 0) {
+      const lastSample = this.samples[this.samples.length - 1];
+      const drop = lastSample - usage;
+      
+      // Significant drop likely indicates GC
+      if (drop > lastSample * 0.1) {
+        gcCollectionCount++;
+        this.gcCallbacks.forEach(callback => {
+          try {
+            callback({
+              timestamp: Date.now(),
+              freedMemory: drop,
+              currentUsage: usage
+            });
+          } catch (e) {
+            // Ignore callback errors
+          }
+        });
+      }
+    }
+    
     this.samples.push(usage);
     
     // Update peak and min
@@ -328,20 +351,26 @@ export class MemoryMonitor {
   }
   
   getTrend(): 'increasing' | 'decreasing' | 'stable' {
-    if (this.samples.length < 10) return 'stable';
+    if (this.samples.length < 5) return 'stable';
     
-    const recent = this.samples.slice(-10);
-    const earlier = this.samples.slice(-20, -10);
+    // Use linear regression for trend detection
+    const n = Math.min(this.samples.length, 20);
+    const recentSamples = this.samples.slice(-n);
+    const indices = Array.from({ length: n }, (_, i) => i);
     
-    if (earlier.length === 0) return 'stable';
+    const sumX = indices.reduce((sum, x) => sum + x, 0);
+    const sumY = recentSamples.reduce((sum, y) => sum + y, 0);
+    const sumXY = indices.reduce((sum, x, i) => sum + x * recentSamples[i], 0);
+    const sumX2 = indices.reduce((sum, x) => sum + x * x, 0);
     
-    const recentAvg = recent.reduce((sum, val) => sum + val, 0) / recent.length;
-    const earlierAvg = earlier.reduce((sum, val) => sum + val, 0) / earlier.length;
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const avgY = sumY / n;
     
-    const difference = (recentAvg - earlierAvg) / earlierAvg;
+    // Normalize slope by average value
+    const normalizedSlope = slope / avgY;
     
-    if (difference > 0.1) return 'increasing';
-    if (difference < -0.1) return 'decreasing';
+    if (normalizedSlope > 0.01) return 'increasing';
+    if (normalizedSlope < -0.01) return 'decreasing';
     return 'stable';
   }
   
@@ -358,41 +387,55 @@ export class MemoryMonitor {
   }
   
   getMemoryLeakProbability(): number {
-    if (this.samples.length < 20) return 0;
+    if (this.samples.length < 10) return 0;
+    
+    // Use recent samples for trend detection
+    const recentSamples = this.samples.slice(-20);
+    const n = recentSamples.length;
+    
+    if (n < 10) return 0;
     
     // Linear regression to detect consistent growth
-    const n = this.samples.length;
     const indices = Array.from({ length: n }, (_, i) => i);
     
     const sumX = indices.reduce((sum, x) => sum + x, 0);
-    const sumY = this.samples.reduce((sum, y) => sum + y, 0);
-    const sumXY = indices.reduce((sum, x, i) => sum + x * this.samples[i], 0);
+    const sumY = recentSamples.reduce((sum, y) => sum + y, 0);
+    const sumXY = indices.reduce((sum, x, i) => sum + x * recentSamples[i], 0);
     const sumX2 = indices.reduce((sum, x) => sum + x * x, 0);
     
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const denominator = n * sumX2 - sumX * sumX;
+    if (denominator === 0) return 0;
+    
+    const slope = (n * sumXY - sumX * sumY) / denominator;
     const avgUsage = sumY / n;
+    
+    if (avgUsage === 0) return 0;
     
     // Normalize slope by average usage
     const normalizedSlope = slope / avgUsage;
     
     // Calculate R-squared to measure fit quality
     const yMean = sumY / n;
-    const ssTotal = this.samples.reduce((sum, y) => {
+    const ssTotal = recentSamples.reduce((sum, y) => {
       const diff = y - yMean;
       return sum + diff * diff;
     }, 0);
     
-    const ssResidual = this.samples.reduce((sum, y, i) => {
-      const predicted = (slope * i) + (yMean - slope * (sumX / n));
+    if (ssTotal === 0) return 0;
+    
+    const intercept = yMean - slope * (sumX / n);
+    const ssResidual = recentSamples.reduce((sum, y, i) => {
+      const predicted = slope * i + intercept;
       const diff = y - predicted;
       return sum + diff * diff;
     }, 0);
     
-    const rSquared = 1 - (ssResidual / ssTotal);
+    const rSquared = Math.max(0, Math.min(1, 1 - (ssResidual / ssTotal)));
     
-    // High positive slope with good fit indicates likely memory leak
-    if (normalizedSlope > 0.01 && rSquared > 0.7) {
-      return Math.min(0.9, rSquared * normalizedSlope * 100);
+    // Detect consistent growth pattern
+    if (normalizedSlope > 0.001 && rSquared > 0.6) {
+      // Scale probability based on slope and fit quality
+      return Math.min(0.9, Math.sqrt(rSquared) * Math.min(1, normalizedSlope * 50));
     }
     
     return 0;
@@ -437,7 +480,7 @@ export class MemoryMonitor {
       trend: this.getTrend(),
       volatility: this.getVolatility(),
       leakProbability: this.getMemoryLeakProbability(),
-      gcFrequency: gcCollectionCount / (duration / 1000), // GCs per second
+      gcFrequency: duration > 0 ? gcCollectionCount / (duration / 1000) : 0, // GCs per second
       samples: this.samples.length,
       duration
     };

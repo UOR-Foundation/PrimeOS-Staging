@@ -92,12 +92,16 @@ export class PrimeRegistryAdapter {
       factorizations: 0,
       primalityTests: 0,
       batchOperations: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
       totalOperationTime: 0,
       errorCount: 0,
       averageResponseTime: 0
-    };
+    } as AdapterMetrics;
+    
+    // Only add cache metrics if caching is enabled
+    if (this.enableCaching) {
+      this.metrics.cacheHits = 0;
+      this.metrics.cacheMisses = 0;
+    }
   }
   
   /**
