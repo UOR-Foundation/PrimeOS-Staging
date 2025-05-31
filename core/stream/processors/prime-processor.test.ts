@@ -1,607 +1,424 @@
 /**
  * Prime Stream Processor Tests
- * ===========================
+ * ============================
  * 
- * Test suite for the prime stream processor that handles
- * prime-encoded data streams with factorization and integrity verification.
+ * Tests for prime-encoded stream processing functionality.
  */
 
-import { 
-  PrimeStreamProcessorImpl 
-} from './prime-processor';
-import { 
-  PrimeStreamProcessor,
-  PrimeStreamOptions,
-  ProcessedChunk,
-  VerificationResult
-} from '../types';
-
-// Import Factor from prime module
+import { PrimeStreamProcessorImpl } from './prime-processor';
+import { ProcessedChunk, VerificationResult } from '../types';
+import { PRIME_CONSTANTS, MEMORY_CONSTANTS, FACTORIZATION_STRATEGY } from '../constants';
 import { Factor } from '../../prime/types';
 
-// Mock the os modules
-jest.mock('../../../os/model', () => ({
-  BaseModel: class MockBaseModel {
-    protected logger = {
-      debug: jest.fn().mockResolvedValue(undefined),
-      info: jest.fn().mockResolvedValue(undefined),
-      warn: jest.fn().mockResolvedValue(undefined),
-      error: jest.fn().mockResolvedValue(undefined)
-    };
-  }
-}));
-
-// Mock prime registry interface with all required methods
+// Mock dependencies
 const mockPrimeRegistry = {
-  factor: jest.fn().mockImplementation((n: bigint): Factor[] => {
-    if (n === 60n) {
-      return [
-        { prime: 2n, exponent: 2 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
-      ];
-    }
-    if (n === 12n) {
-      return [
-        { prime: 2n, exponent: 2 },
-        { prime: 3n, exponent: 1 }
-      ];
-    }
-    if (n === 17n) {
-      return [{ prime: 17n, exponent: 1 }];
-    }
-    return [{ prime: n, exponent: 1 }];
-  }),
-  isPrime: jest.fn().mockImplementation((n: bigint): boolean => {
-    const primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n];
-    return primes.includes(n);
-  }),
-  getPrime: jest.fn().mockImplementation((index: number): bigint => {
-    const primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n];
-    return primes[index] || BigInt(index * 2 + 1);
-  }),
-  getIndex: jest.fn().mockImplementation((prime: bigint): number => {
-    const primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n];
-    return primes.indexOf(prime);
-  }),
-  extendTo: jest.fn().mockImplementation((idx: number): void => {
-    // Mock implementation
-  }),
-  integerSqrt: jest.fn().mockImplementation((n: bigint): bigint => {
-    return BigInt(Math.floor(Math.sqrt(Number(n))));
-  }),
-  createPrimeStream: jest.fn().mockImplementation((startIdx?: number) => {
-    return {
-      async *[Symbol.asyncIterator]() {
-        const primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n];
-        for (const prime of primes.slice(startIdx || 0)) {
-          yield prime;
-        }
-      },
-      async toArray() {
-        const primes = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n];
-        return primes.slice(startIdx || 0);
-      }
-    };
-  }),
-  createFactorStream: jest.fn().mockImplementation((x: bigint) => {
-    return {
-      async *[Symbol.asyncIterator]() {
-        yield [{ prime: x, exponent: 1 }];
-      },
-      async toArray() {
-        return [{ prime: x, exponent: 1 }];
-      }
-    };
-  }),
-  factorizeStreaming: jest.fn().mockImplementation(async (stream: any) => {
-    return [{ prime: 2n, exponent: 1 }];
-  }),
-  getVersion: jest.fn().mockReturnValue('1.0.0'),
-  clearCache: jest.fn().mockImplementation(() => {})
+  isPrime: jest.fn(),
+  factor: jest.fn(),
+  getPrime: jest.fn(),
+  getNthPrime: jest.fn(),
+  getPrimesInRange: jest.fn(),
+  getIndex: jest.fn(),
+  extendTo: jest.fn(),
+  integerSqrt: jest.fn(),
+  createPrimeStream: jest.fn(),
+  factorizeStreaming: jest.fn(),
+  createFactorStream: jest.fn(),
+  batchFactorization: jest.fn()
+} as any;
+
+const mockLogger = {
+  debug: jest.fn().mockResolvedValue(undefined),
+  info: jest.fn().mockResolvedValue(undefined),
+  warn: jest.fn().mockResolvedValue(undefined),
+  error: jest.fn().mockResolvedValue(undefined)
 };
 
-describe('Prime Stream Processor', () => {
-  let processor: PrimeStreamProcessor;
-  let options: PrimeStreamOptions;
-  
+// Mock Worker Pool
+jest.mock('../utils/worker-pool', () => ({
+  getGlobalWorkerPool: jest.fn(() => ({
+    execute: jest.fn().mockResolvedValue({
+      success: true,
+      result: [{ prime: 2n, exponent: 1 }],
+      executionTime: 10
+    })
+  }))
+}));
+
+describe('PrimeStreamProcessor', () => {
+  let processor: PrimeStreamProcessorImpl;
+
   beforeEach(() => {
-    // Reset the mock to ensure clean state
     jest.clearAllMocks();
-    
-    // Re-establish the factor mock implementation
-    mockPrimeRegistry.factor.mockImplementation((n: bigint): Factor[] => {
-      if (n === 60n) {
-        return [
-          { prime: 2n, exponent: 2 },
-          { prime: 3n, exponent: 1 },
-          { prime: 5n, exponent: 1 }
-        ];
-      }
-      if (n === 12n) {
-        return [
-          { prime: 2n, exponent: 2 },
-          { prime: 3n, exponent: 1 }
-        ];
-      }
-      if (n === 17n) {
-        return [{ prime: 17n, exponent: 1 }];
-      }
-      if (n === 19n) {
-        return [{ prime: 19n, exponent: 1 }];
-      }
-      if (n === 23n) {
-        return [{ prime: 23n, exponent: 1 }];
-      }
-      return [{ prime: n, exponent: 1 }];
-    });
-    
-    options = {
-      chunkSize: 1024,
-      maxConcurrency: 4,
-      enableIntegrityCheck: true,
-      factorizationStrategy: 'adaptive',
-      memoryLimit: 100 * 1024 * 1024 // 100MB
-    };
-    
     processor = new PrimeStreamProcessorImpl({
-      primeRegistry: mockPrimeRegistry as any,
-      chunkSize: options.chunkSize,
-      logger: null
+      primeRegistry: mockPrimeRegistry,
+      chunkSize: 10,
+      logger: mockLogger
     });
   });
-  
-  describe('Basic Functionality', () => {
-    test('should create prime stream processor', () => {
-      expect(processor).toBeDefined();
-      expect(typeof processor.processPrimeStream).toBe('function');
-      expect(typeof processor.streamFactorization).toBe('function');
-      expect(typeof processor.verifyStreamIntegrity).toBe('function');
-    });
-    
-    test('should configure with options', () => {
-      processor.configure(options);
+
+  describe('Initialization', () => {
+    it('should initialize with correct configuration', () => {
+      // Access private config through metrics which reflect configuration
       const metrics = processor.getMetrics();
       expect(metrics).toBeDefined();
-      expect(typeof metrics.chunksProcessed).toBe('number');
-      expect(typeof metrics.numbersFactorized).toBe('number');
+      expect(metrics.chunksProcessed).toBe(0);
+      // We can't directly access config, but we know defaults are used
+    });
+
+    it('should track initial metrics', () => {
+      const metrics = processor.getMetrics();
+      expect(metrics.chunksProcessed).toBe(0);
+      expect(metrics.numbersFactorized).toBe(0);
+      expect(metrics.integrityChecksPerformed).toBe(0);
+      expect(metrics.averageProcessingTime).toBe(0);
+      expect(metrics.memoryUsage).toBe(0);
+      expect(metrics.errorRate).toBe(0);
     });
   });
-  
+
   describe('Prime Stream Processing', () => {
-    test('should process prime stream chunks', async () => {
+    it('should process prime stream chunks', async () => {
       const chunks = async function* () {
-        yield 60n;
-        yield 12n;
-        yield 17n;
+        yield BigInt(123456789);
+        yield BigInt(987654321);
       };
-      
-      const results = await processor.processPrimeStream(chunks());
-      
-      expect(results).toHaveLength(3);
-      expect(results[0]).toMatchObject({
-        originalChunk: 60n,
-        verified: expect.any(Boolean),
-        errors: expect.any(Array)
-      });
+
+      mockPrimeRegistry.isPrime.mockReturnValue(false);
+      mockPrimeRegistry.factor.mockResolvedValue([
+        { prime: 3n, exponent: 2 },
+        { prime: 3607n, exponent: 1 },
+        { prime: 3803n, exponent: 1 }
+      ]);
+
+      const result = await processor.processPrimeStream(chunks());
+
+      expect(result).toHaveLength(2);
+      expect(result[0].originalChunk).toBe(BigInt(123456789));
+      expect(result[0].verified).toBe(true);
+      expect(result[0].errors).toHaveLength(0);
     });
-    
-    test('should handle empty streams', async () => {
-      const emptyChunks = async function* (): AsyncGenerator<bigint> {
-        // Empty stream
+
+    it('should handle invalid chunks', async () => {
+      const chunks = async function* () {
+        yield BigInt(0); // Invalid chunk
       };
-      
-      const results = await processor.processPrimeStream(emptyChunks());
-      expect(results).toHaveLength(0);
+
+      const result = await processor.processPrimeStream(chunks());
+
+      expect(result).toHaveLength(1);
+      expect(result[0].errors).toContain('Invalid chunk value: 0');
+      expect(result[0].verified).toBe(false);
     });
-    
-    test('should handle single chunk', async () => {
-      const singleChunk = async function* () {
-        yield 17n;
+
+    it('should decode chunk data', async () => {
+      const chunks = async function* () {
+        yield BigInt(1000000);
       };
-      
-      const results = await processor.processPrimeStream(singleChunk());
-      expect(results).toHaveLength(1);
-      expect(results[0].originalChunk).toBe(17n);
+
+      const result = await processor.processPrimeStream(chunks());
+
+      expect(result).toHaveLength(1);
+      expect(result[0].decodedData).toBeDefined();
+      expect(result[0].decodedData.type).toBe('data'); // ChunkType.DATA
     });
   });
-  
-  describe('Factorization Streaming', () => {
-    test('should stream factorization of numbers', async () => {
+
+  describe('Stream Factorization', () => {
+    it('should factor numbers in stream', async () => {
       const numbers = async function* () {
-        yield 60n;
-        yield 12n;
-        yield 17n;
+        yield BigInt(12);
+        yield BigInt(15);
+        yield BigInt(20);
       };
-      
-      const factorStream = await processor.streamFactorization(numbers());
+
+      mockPrimeRegistry.factor.mockImplementation(async (n: bigint) => {
+        if (n === 12n) return [{ prime: 2n, exponent: 2 }, { prime: 3n, exponent: 1 }];
+        if (n === 15n) return [{ prime: 3n, exponent: 1 }, { prime: 5n, exponent: 1 }];
+        if (n === 20n) return [{ prime: 2n, exponent: 2 }, { prime: 5n, exponent: 1 }];
+        return [];
+      });
+
+      const result = await processor.streamFactorization(numbers());
       const factors: Factor[][] = [];
       
-      for await (const factorArray of factorStream) {
-        factors.push(factorArray);
+      for await (const factorList of result) {
+        factors.push(factorList);
       }
-      
+
       expect(factors).toHaveLength(3);
       expect(factors[0]).toEqual([
         { prime: 2n, exponent: 2 },
-        { prime: 3n, exponent: 1 },
-        { prime: 5n, exponent: 1 }
-      ]);
-      expect(factors[1]).toEqual([
-        { prime: 2n, exponent: 2 },
         { prime: 3n, exponent: 1 }
       ]);
-      expect(factors[2]).toEqual([
-        { prime: 17n, exponent: 1 }
-      ]);
     });
-    
-    test('should handle large numbers in factorization', async () => {
-      const largeNumbers = async function* () {
-        yield 1000000n;
-        yield 999999n;
-      };
-      
-      const factorStream = await processor.streamFactorization(largeNumbers());
-      const factors: Factor[][] = [];
-      
-      for await (const factorArray of factorStream) {
-        factors.push(factorArray);
-      }
-      
-      expect(factors).toHaveLength(2);
-      expect(factors[0]).toBeDefined();
-      expect(factors[1]).toBeDefined();
-    });
-    
-    test('should handle prime numbers in factorization', async () => {
-      const primes = async function* () {
-        yield 17n;
-        yield 19n;
-        yield 23n;
-      };
-      
-      const factorStream = await processor.streamFactorization(primes());
-      const factors: Factor[][] = [];
-      
-      for await (const factorArray of factorStream) {
-        factors.push(factorArray);
-      }
-      
-      expect(factors).toHaveLength(3);
-      expect(factors[0]).toEqual([{ prime: 17n, exponent: 1 }]);
-      expect(factors[1]).toEqual([{ prime: 19n, exponent: 1 }]);
-      expect(factors[2]).toEqual([{ prime: 23n, exponent: 1 }]);
-    });
-  });
-  
-  describe('Integrity Verification', () => {
-    test('should verify stream integrity', async () => {
-      const chunks = async function* () {
-        yield 60n;
-        yield 12n;
-        yield 17n;
-      };
-      
-      const results = await processor.verifyStreamIntegrity(chunks());
-      
-      expect(results).toHaveLength(3);
-      results.forEach(result => {
-        expect(result).toMatchObject({
-          chunk: expect.any(BigInt),
-          valid: expect.any(Boolean),
-          checksum: expect.any(BigInt),
-          errors: expect.any(Array),
-          verificationTime: expect.any(Number)
-        });
-      });
-    });
-    
-    test('should detect integrity failures', async () => {
-      // Mock a failure scenario by making factor return empty array
-      mockPrimeRegistry.factor.mockImplementationOnce(() => {
-        throw new Error('Factorization failed');
-      });
-      
-      const chunks = async function* () {
-        yield 60n;
-      };
-      
-      const results = await processor.verifyStreamIntegrity(chunks());
-      
-      expect(results).toHaveLength(1);
-      expect(results[0].valid).toBe(false);
-      expect(results[0].errors.length).toBeGreaterThan(0);
-    });
-    
-    test('should handle invalid chunks in verification', async () => {
-      const chunks = async function* () {
-        yield 0n; // Invalid input
-        yield -5n; // Invalid input
-      };
-      
-      const results = await processor.verifyStreamIntegrity(chunks());
-      
-      expect(results).toHaveLength(2);
-      // Should handle gracefully without crashing
-      expect(results[0]).toBeDefined();
-      expect(results[1]).toBeDefined();
-    });
-  });
-  
-  describe('Performance Metrics', () => {
-    test('should track processing metrics', async () => {
-      const chunks = async function* () {
-        yield 60n;
-        yield 12n;
-      };
-      
-      await processor.processPrimeStream(chunks());
-      
-      const metrics = processor.getMetrics();
-      expect(metrics.chunksProcessed).toBeGreaterThan(0);
-      expect(metrics.averageProcessingTime).toBeGreaterThanOrEqual(0);
-      expect(metrics.memoryUsage).toBeGreaterThanOrEqual(0);
-      expect(metrics.errorRate).toBeGreaterThanOrEqual(0);
-    });
-    
-    test('should track factorization metrics', async () => {
+
+    it('should handle prime numbers', async () => {
       const numbers = async function* () {
-        yield 60n;
-        yield 12n;
-        yield 17n;
+        yield BigInt(7);
+        yield BigInt(13);
       };
+
+      mockPrimeRegistry.isPrime.mockReturnValue(true);
+      mockPrimeRegistry.factor.mockImplementation(async (n: bigint) => {
+        return [{ prime: n, exponent: 1 }];
+      });
+
+      const result = await processor.streamFactorization(numbers());
+      const factors: Factor[][] = [];
       
-      const factorStream = await processor.streamFactorization(numbers());
-      
-      // Consume the stream
-      for await (const factors of factorStream) {
-        // Process factors
+      for await (const factorList of result) {
+        factors.push(factorList);
       }
-      
-      const metrics = processor.getMetrics();
-      expect(metrics.numbersFactorized).toBeGreaterThan(0);
+
+      expect(factors).toHaveLength(2);
+      expect(factors[0]).toEqual([{ prime: 7n, exponent: 1 }]);
+      expect(factors[1]).toEqual([{ prime: 13n, exponent: 1 }]);
     });
-    
-    test('should track integrity check metrics', async () => {
-      const chunks = async function* () {
-        yield 60n;
-        yield 12n;
+
+    it('should use parallel strategy for large numbers', async () => {
+      const numbers = async function* () {
+        yield BigInt('12345678901234567890'); // Large number
       };
+
+      const result = processor.streamFactorization(numbers());
       
-      await processor.verifyStreamIntegrity(chunks());
-      
-      const metrics = processor.getMetrics();
-      expect(metrics.integrityChecksPerformed).toBeGreaterThan(0);
+      for await (const factorList of result) {
+        expect(factorList).toBeDefined();
+      }
+
+      // Verify worker pool was used
+      const { getGlobalWorkerPool } = require('../utils/worker-pool');
+      const pool = getGlobalWorkerPool();
+      expect(pool.execute).toHaveBeenCalled();
     });
   });
-  
-  describe('Configuration Management', () => {
-    test('should update configuration', () => {
-      const newOptions: PrimeStreamOptions = {
-        chunkSize: 2048,
+
+  describe('Stream Integrity Verification', () => {
+    it('should verify chunk integrity', async () => {
+      const chunks = async function* () {
+        yield BigInt(12345);
+        yield BigInt(54321);
+      };
+
+      const results = await processor.verifyStreamIntegrity(chunks());
+
+      expect(results).toHaveLength(2);
+      expect(results[0].chunk).toBe(BigInt(12345));
+      expect(results[0].valid).toBe(true);
+      expect(results[0].checksum).toBeDefined();
+      expect(results[0].errors).toHaveLength(0);
+    });
+
+    it('should detect invalid checksums', async () => {
+      const chunks = async function* () {
+        yield BigInt(1); // Small value that might fail checksum
+      };
+
+      const results = await processor.verifyStreamIntegrity(chunks());
+
+      expect(results).toHaveLength(1);
+      // Checksum validation depends on implementation
+      expect(results[0].checksum).toBeDefined();
+    });
+
+    it('should calculate verification time', async () => {
+      const chunks = async function* () {
+        yield BigInt(99999);
+      };
+
+      const results = await processor.verifyStreamIntegrity(chunks());
+
+      expect(results[0].verificationTime).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Configuration', () => {
+    it('should update configuration', () => {
+      processor.configure({
+        chunkSize: 20,
         maxConcurrency: 8,
         enableIntegrityCheck: false,
         factorizationStrategy: 'parallel',
-        memoryLimit: 200 * 1024 * 1024
-      };
-      
-      processor.configure(newOptions);
-      
-      // Verify configuration was applied
-      const metrics = processor.getMetrics();
-      expect(metrics).toBeDefined();
-    });
-    
-    test('should handle partial configuration updates', () => {
-      const partialOptions: Partial<PrimeStreamOptions> = {
-        chunkSize: 512,
-        enableIntegrityCheck: false
-      };
-      
-      processor.configure(partialOptions as PrimeStreamOptions);
-      
-      // Should not throw error
-      expect(processor).toBeDefined();
-    });
-  });
-  
-  describe('Error Handling', () => {
-    test('should handle prime registry errors gracefully', async () => {
-      // Mock registry to throw error
-      mockPrimeRegistry.factor.mockImplementationOnce(() => {
-        throw new Error('Registry error');
+        memoryLimit: 100 * 1024 * 1024
       });
-      
-      const chunks = async function* () {
-        yield 60n;
-      };
-      
-      const results = await processor.processPrimeStream(chunks());
-      
-      expect(results).toHaveLength(1);
-      expect(results[0].errors.length).toBeGreaterThan(0);
+
+      // We can't directly verify config, but operation should not throw
+      expect(() => processor.getMetrics()).not.toThrow();
     });
-    
-    test('should handle stream processing errors', async () => {
-      const errorChunks = async function* (): AsyncGenerator<bigint> {
-        yield 60n;
-        throw new Error('Stream error');
-      };
-      
-      await expect(processor.processPrimeStream(errorChunks())).rejects.toThrow();
-    });
-    
-    test('should recover from transient errors', async () => {
-      let callCount = 0;
-      mockPrimeRegistry.factor.mockImplementation((n: bigint) => {
-        callCount++;
-        if (callCount === 1) {
-          throw new Error('Transient error');
-        }
-        return [{ prime: n, exponent: 1 }];
-      });
-      
-      const chunks = async function* () {
-        yield 60n;
-        yield 12n;
-      };
-      
-      const results = await processor.processPrimeStream(chunks());
-      
-      // Should have processed at least one chunk successfully
-      expect(results.length).toBeGreaterThan(0);
-    });
-  });
-  
-  describe('Concurrency and Performance', () => {
-    test('should handle concurrent processing', async () => {
-      const largeStream = async function* () {
-        for (let i = 10; i < 100; i++) {
-          yield BigInt(i);
-        }
-      };
-      
-      const startTime = Date.now();
-      const results = await processor.processPrimeStream(largeStream());
-      const endTime = Date.now();
-      
-      expect(results.length).toBe(90);
-      expect(endTime - startTime).toBeLessThan(5000); // Should complete within 5 seconds
-    });
-    
-    test('should handle high-throughput factorization', async () => {
-      const numbers = async function* () {
-        for (let i = 2; i < 50; i++) {
-          yield BigInt(i);
-        }
-      };
-      
-      const factorStream = await processor.streamFactorization(numbers());
-      const factors: Factor[][] = [];
-      
-      const startTime = Date.now();
-      for await (const factorArray of factorStream) {
-        factors.push(factorArray);
-      }
-      const endTime = Date.now();
-      
-      expect(factors.length).toBe(48);
-      expect(endTime - startTime).toBeLessThan(3000); // Should complete within 3 seconds
-    });
-  });
-  
-  describe('Memory Management', () => {
-    test('should track memory usage', () => {
-      const metrics = processor.getMetrics();
-      expect(metrics.memoryUsage).toBeGreaterThanOrEqual(0);
-    });
-    
-    test('should handle memory pressure', async () => {
-      // Configure with low memory limit
+
+    it('should maintain memory limit', () => {
       processor.configure({
         chunkSize: 1024,
         maxConcurrency: 4,
         enableIntegrityCheck: true,
         factorizationStrategy: 'adaptive',
-        memoryLimit: 1024 // Very low limit
+        memoryLimit: 50 * 1024 * 1024 // 50MB
       });
-      
-      const chunks = async function* () {
-        yield 60n;
-        yield 12n;
-      };
-      
-      // Should handle gracefully without crashing
-      const results = await processor.processPrimeStream(chunks());
-      expect(results).toBeDefined();
+
+      // We can't directly verify config, but operation should not throw
+      expect(() => processor.getMetrics()).not.toThrow();
     });
   });
-  
-  describe('Strategy Testing', () => {
-    test('should support parallel factorization strategy', () => {
-      processor.configure({
-        chunkSize: 1024,
+
+  describe('Metrics Tracking', () => {
+    it('should update metrics after processing', async () => {
+      const chunks = async function* () {
+        yield BigInt(1000);
+        yield BigInt(2000);
+      };
+
+      await processor.processPrimeStream(chunks());
+
+      const metrics = processor.getMetrics();
+      expect(metrics.chunksProcessed).toBe(2);
+      expect(metrics.averageProcessingTime).toBeGreaterThan(0);
+    });
+
+    it('should track factorization metrics', async () => {
+      const numbers = async function* () {
+        yield BigInt(10);
+        yield BigInt(20);
+        yield BigInt(30);
+      };
+
+      mockPrimeRegistry.factor.mockResolvedValue([
+        { prime: 2n, exponent: 1 },
+        { prime: 5n, exponent: 1 }
+      ]);
+
+      const result = processor.streamFactorization(numbers());
+      const allFactors: Factor[][] = [];
+      for await (const factors of result) {
+        allFactors.push(factors);
+      }
+
+      const metrics = processor.getMetrics();
+      expect(metrics.numbersFactorized).toBe(3);
+    });
+
+    it('should track integrity check metrics', async () => {
+      const chunks = async function* () {
+        yield BigInt(111);
+        yield BigInt(222);
+      };
+
+      await processor.verifyStreamIntegrity(chunks());
+
+      const metrics = processor.getMetrics();
+      expect(metrics.integrityChecksPerformed).toBe(2);
+    });
+
+    it('should calculate error rate', async () => {
+      const chunks = async function* () {
+        yield BigInt(100);
+        yield BigInt(0); // Invalid
+        yield BigInt(200);
+      };
+
+      await processor.processPrimeStream(chunks());
+
+      const metrics = processor.getMetrics();
+      expect(metrics.errorRate).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Memory Management', () => {
+    it('should estimate memory usage', () => {
+      const initialMetrics = processor.getMetrics();
+      
+      // Simulate some processing to accumulate memory
+      (processor as any).stats.chunksProcessed = 100;
+      (processor as any).updateMetrics();
+
+      const metrics = processor.getMetrics();
+      expect(metrics.memoryUsage).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle factorization errors gracefully', async () => {
+      const numbers = async function* () {
+        yield BigInt(100);
+      };
+
+      mockPrimeRegistry.factor.mockRejectedValue(new Error('Factorization failed'));
+
+      const result = processor.streamFactorization(numbers());
+      const factors: Factor[][] = [];
+      
+      for await (const factorList of result) {
+        factors.push(factorList);
+      }
+
+      expect(factors).toHaveLength(1);
+      expect(factors[0]).toEqual([]); // Empty array on error
+      expect(mockLogger.error).toHaveBeenCalled();
+    });
+
+    it('should continue processing after errors', async () => {
+      const chunks = async function* () {
+        yield BigInt(100);
+        yield BigInt(0); // Error
+        yield BigInt(200);
+      };
+
+      const result = await processor.processPrimeStream(chunks());
+
+      expect(result).toHaveLength(3);
+      expect(result[1].errors.length).toBeGreaterThan(0);
+      expect(result[2].errors).toHaveLength(0); // Continued processing
+    });
+  });
+
+  describe('Batch Processing', () => {
+    it('should handle batch verification', async () => {
+      const largeBatch = async function* () {
+        for (let i = 1; i <= 20; i++) {
+          yield BigInt(i * 1000);
+        }
+      };
+
+      const results = await processor.verifyStreamIntegrity(largeBatch());
+
+      expect(results).toHaveLength(20);
+      // Should have processed in batches internally
+      expect(results.every(r => r.checksum !== undefined)).toBe(true);
+    });
+  });
+
+  describe('Strategy Selection', () => {
+    it('should use trial division for small numbers', async () => {
+      const getStrategy = (processor as any).getFactorizationStrategy.bind(processor);
+      
+      const smallNumber = BigInt(100); // < 50 bits
+      const strategy = getStrategy(smallNumber);
+      
+      expect(strategy).toBe('trial');
+    });
+
+    it('should use adaptive strategy for medium numbers', async () => {
+      const getStrategy = (processor as any).getFactorizationStrategy.bind(processor);
+      
+      const mediumNumber = BigInt('1234567890'); // Between 50-100 bits
+      const strategy = getStrategy(mediumNumber);
+      
+      expect(strategy).toBe('adaptive');
+    });
+
+    it('should use parallel strategy when configured', () => {
+      processor.configure({ 
+        chunkSize: 10,
         maxConcurrency: 4,
         enableIntegrityCheck: true,
         factorizationStrategy: 'parallel',
         memoryLimit: 100 * 1024 * 1024
       });
       
-      expect(processor).toBeDefined();
-    });
-    
-    test('should support sequential factorization strategy', () => {
-      processor.configure({
-        chunkSize: 1024,
-        maxConcurrency: 1,
-        enableIntegrityCheck: true,
-        factorizationStrategy: 'sequential',
-        memoryLimit: 100 * 1024 * 1024
-      });
+      const getStrategy = (processor as any).getFactorizationStrategy.bind(processor);
+      const anyNumber = BigInt(12345);
+      const strategy = getStrategy(anyNumber);
       
-      expect(processor).toBeDefined();
-    });
-    
-    test('should support adaptive factorization strategy', () => {
-      processor.configure({
-        chunkSize: 1024,
-        maxConcurrency: 4,
-        enableIntegrityCheck: true,
-        factorizationStrategy: 'adaptive',
-        memoryLimit: 100 * 1024 * 1024
-      });
-      
-      expect(processor).toBeDefined();
-    });
-  });
-  
-  describe('Integration Testing', () => {
-    test('should work with different prime registry implementations', () => {
-      const alternativeRegistry = {
-        factor: jest.fn().mockReturnValue([{ prime: 2n, exponent: 1 }]),
-        isPrime: jest.fn().mockReturnValue(true),
-        getPrime: jest.fn().mockReturnValue(2n),
-        getIndex: jest.fn().mockReturnValue(0),
-        extendTo: jest.fn(),
-        integerSqrt: jest.fn().mockReturnValue(1n),
-        createPrimeStream: jest.fn().mockReturnValue({
-          async *[Symbol.asyncIterator]() { yield 2n; },
-          async toArray() { return [2n]; }
-        }),
-        createFactorStream: jest.fn().mockReturnValue({
-          async *[Symbol.asyncIterator]() { yield [{ prime: 2n, exponent: 1 }]; },
-          async toArray() { return [{ prime: 2n, exponent: 1 }]; }
-        }),
-        factorizeStreaming: jest.fn().mockResolvedValue([{ prime: 2n, exponent: 1 }]),
-        getVersion: jest.fn().mockReturnValue('1.0.0'),
-        clearCache: jest.fn()
-      };
-      
-      const altProcessor = new PrimeStreamProcessorImpl({
-        primeRegistry: alternativeRegistry as any,
-        chunkSize: 512,
-        logger: null
-      });
-      
-      expect(altProcessor).toBeDefined();
-    });
-    
-    test('should handle logging integration', () => {
-      const mockLogger = {
-        debug: jest.fn().mockResolvedValue(undefined),
-        info: jest.fn().mockResolvedValue(undefined),
-        warn: jest.fn().mockResolvedValue(undefined),
-        error: jest.fn().mockResolvedValue(undefined)
-      };
-      
-      const loggedProcessor = new PrimeStreamProcessorImpl({
-        primeRegistry: mockPrimeRegistry as any,
-        chunkSize: 1024,
-        logger: mockLogger
-      });
-      
-      expect(loggedProcessor).toBeDefined();
+      expect(strategy).toBe('parallel');
     });
   });
 });

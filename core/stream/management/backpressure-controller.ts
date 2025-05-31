@@ -2,268 +2,267 @@
  * Backpressure Controller Implementation
  * =====================================
  * 
- * Manages flow control in streaming operations to prevent memory overflow
- * and ensure stable performance under high throughput conditions.
+ * Production implementation of backpressure management for stream processing.
+ * Provides flow control, buffer level monitoring, and pressure detection.
  */
 
 import { BackpressureController, MemoryStats } from '../types';
 import { getMemoryStats } from '../utils/memory-utils';
 
-/**
- * Backpressure state enumeration
- */
-export enum BackpressureState {
-  NORMAL = 'normal',
-  WARNING = 'warning',
-  CRITICAL = 'critical',
-  BLOCKED = 'blocked'
+export interface BackpressureConfig {
+  enabled?: boolean;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  blockingThreshold?: number;
+  checkInterval?: number;
+  enableLogging?: boolean;
 }
 
-/**
- * Backpressure event types
- */
+export enum BackpressureState {
+  NORMAL = 'NORMAL',
+  WARNING = 'WARNING', 
+  CRITICAL = 'CRITICAL',
+  BLOCKED = 'BLOCKED'
+}
+
 export interface BackpressureEvent {
-  type: 'pressure_start' | 'pressure_end' | 'buffer_full' | 'memory_critical';
+  type: 'PRESSURE_START' | 'PRESSURE_END' | 'STATE_CHANGE' | 'OVERFLOW';
   timestamp: number;
   state: BackpressureState;
   bufferLevel: number;
-  memoryUsage: number;
-  details?: Record<string, any>;
+  memoryUsage?: number;
+  details?: string;
 }
 
-/**
- * Configuration for backpressure controller
- */
-export interface BackpressureConfig {
-  warningThreshold: number;     // 0.7 = 70% buffer utilization
-  criticalThreshold: number;    // 0.9 = 90% buffer utilization
-  blockingThreshold: number;    // 0.95 = 95% buffer utilization
-  memoryThreshold: number;      // Memory usage threshold
-  releaseThreshold: number;     // 0.5 = Release pressure at 50%
-  checkInterval: number;        // Milliseconds between checks
-  enableLogging: boolean;       // Enable debug logging
+export interface BackpressureStatistics {
+  currentState: BackpressureState | string;
+  pressureEvents: number;
+  totalPressureTime: number;
+  averagePressureTime: number;
+  isPaused: boolean;
+  bufferOverflows: number;
+  memoryWarnings: number;
 }
 
-/**
- * Default backpressure configuration
- */
-const DEFAULT_CONFIG: BackpressureConfig = {
-  warningThreshold: 0.7,
-  criticalThreshold: 0.9,
-  blockingThreshold: 0.95,
-  memoryThreshold: 0.8,
-  releaseThreshold: 0.5,
-  checkInterval: 100,
-  enableLogging: false
-};
-
-/**
- * Implementation of backpressure controller
- */
 export class BackpressureControllerImpl implements BackpressureController {
-  private config: BackpressureConfig;
-  private logger?: any;
-  
-  // State management
+  private config: Required<BackpressureConfig>;
   private currentState: BackpressureState = BackpressureState.NORMAL;
   private isPaused = false;
   private bufferLevel = 0;
-  private maxBufferSize = 1000;
-  private manuallyPaused = false; // Track if manually paused
+  private maxBufferSize: number;
+  private threshold: number;
   
-  // Event handling
   private pressureCallbacks: (() => void)[] = [];
   private eventHistory: BackpressureEvent[] = [];
+  private statistics: BackpressureStatistics;
+  private monitoringTimer?: NodeJS.Timeout;
+  private logger?: any;
   
-  // Monitoring
-  private checkTimer?: NodeJS.Timeout;
-  private lastCheck = 0;
-  private pressureStartTime = 0;
+  // Pressure tracking
+  private pressureStartTime?: number;
   private totalPressureTime = 0;
+  private pressureEvents = 0;
+  private bufferOverflows = 0;
+  private memoryWarnings = 0;
   
-  // Statistics
-  private stats = {
-    pressureEvents: 0,
-    totalPressureTime: 0,
-    longestPressureEvent: 0,
-    bufferOverflows: 0,
-    memoryWarnings: 0
-  };
+  // Rate limiting for GC
+  private lastGCTime = 0;
+  private GC_RATE_LIMIT = 1000; // 1 second
   
-  constructor(config: Partial<BackpressureConfig> = {}, dependencies: {
-    logger?: any;
-    maxBufferSize?: number;
-  } = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.logger = dependencies.logger;
-    this.maxBufferSize = dependencies.maxBufferSize || 1000;
+  constructor(config: BackpressureConfig = {}, options: any = {}) {
+    this.config = {
+      enabled: config.enabled ?? true,
+      warningThreshold: config.warningThreshold ?? 0.7,
+      criticalThreshold: config.criticalThreshold ?? 0.9, 
+      blockingThreshold: config.blockingThreshold ?? 0.95,
+      checkInterval: config.checkInterval ?? 1000,
+      enableLogging: config.enableLogging ?? false
+    };
     
-    this.startMonitoring();
+    this.maxBufferSize = options.maxBufferSize || 10000;
+    this.threshold = this.config.criticalThreshold;
+    this.logger = options.logger;
+    
+    this.statistics = {
+      currentState: this.currentState,
+      pressureEvents: 0,
+      totalPressureTime: 0,
+      averagePressureTime: 0,
+      isPaused: false,
+      bufferOverflows: 0,
+      memoryWarnings: 0
+    };
+    
+    // Start monitoring if enabled
+    if (this.config.enabled && this.config.checkInterval > 0) {
+      this.startMonitoring();
+    }
   }
   
-  /**
-   * Pause stream processing
-   */
   pause(): void {
-    if (!this.isPaused) {
-      this.isPaused = true;
-      this.manuallyPaused = true;
-      this.updateState(BackpressureState.BLOCKED);
-      this.emitEvent('pressure_start');
-      
-      if (this.logger && this.config.enableLogging) {
-        this.logger.warn('Stream paused due to backpressure').catch(() => {});
-      }
+    if (this.isPaused) return;
+    
+    this.isPaused = true;
+    this.currentState = BackpressureState.BLOCKED;
+    this.pressureStartTime = Date.now();
+    
+    this.addEvent({
+      type: 'STATE_CHANGE',
+      timestamp: Date.now(),
+      state: this.currentState,
+      bufferLevel: this.bufferLevel,
+      details: 'Manual pause'
+    });
+    
+    this.updateStatistics();
+    
+    if (this.logger && this.config.enableLogging) {
+      this.logger.debug('Backpressure controller paused').catch(() => {});
     }
   }
   
-  /**
-   * Resume stream processing
-   */
   resume(): void {
-    if (this.isPaused) {
-      this.isPaused = false;
-      this.manuallyPaused = false;
-      // Calculate state based on current conditions when resuming
-      const calculatedState = this.calculateState();
-      this.updateState(calculatedState);
-      this.emitEvent('pressure_end');
-      
-      if (this.logger && this.config.enableLogging) {
-        this.logger.info('Stream resumed after backpressure release').catch(() => {});
-      }
-    }
-  }
-  
-  /**
-   * Wait for pressure to be relieved
-   */
-  async drain(): Promise<void> {
-    if (!this.isPaused) {
-      return; // Already drained
+    if (!this.isPaused) return;
+    
+    this.isPaused = false;
+    
+    // Track pressure duration
+    if (this.pressureStartTime) {
+      this.totalPressureTime += Date.now() - this.pressureStartTime;
+      this.pressureStartTime = undefined;
     }
     
-    return new Promise<void>((resolve) => {
-      const checkDrained = () => {
-        if (!this.isPaused) {
-          resolve();
-        } else {
-          setTimeout(checkDrained, this.config.checkInterval);
-        }
-      };
-      
-      checkDrained();
+    // Determine new state based on buffer level
+    this.updateStateFromBufferLevel();
+    
+    this.addEvent({
+      type: 'STATE_CHANGE',
+      timestamp: Date.now(),
+      state: this.currentState,
+      bufferLevel: this.bufferLevel,
+      details: 'Manual resume'
     });
+    
+    this.updateStatistics();
+    
+    if (this.logger && this.config.enableLogging) {
+      this.logger.debug('Backpressure controller resumed').catch(() => {});
+    }
   }
   
-  /**
-   * Get current buffer level (0.0 to 1.0)
-   */
+  async drain(): Promise<void> {
+    while (this.isPaused) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+  
   getBufferLevel(): number {
-    return Math.max(0, Math.min(this.bufferLevel / this.maxBufferSize, 1.0));
+    return this.maxBufferSize > 0 ? Math.min(this.bufferLevel / this.maxBufferSize, 1.0) : 0;
   }
   
-  /**
-   * Get current memory usage
-   */
   getMemoryUsage(): MemoryStats | undefined {
-    return getMemoryStats();
+    try {
+      return getMemoryStats();
+    } catch (error) {
+      if (this.logger) {
+        this.logger.warn('Failed to get memory stats', error).catch(() => {});
+      }
+      return undefined;
+    }
   }
   
-  /**
-   * Register callback for pressure events
-   */
   onPressure(callback: () => void): void {
     this.pressureCallbacks.push(callback);
   }
   
-  /**
-   * Set backpressure threshold
-   */
   setThreshold(threshold: number): void {
-    this.config.criticalThreshold = Math.max(0, Math.min(1, threshold));
-    
-    if (this.logger && this.config.enableLogging) {
-      this.logger.debug('Backpressure threshold updated', { 
-        threshold: this.config.criticalThreshold 
-      }).catch(() => {});
-    }
+    this.threshold = Math.max(0, Math.min(1, threshold));
   }
   
-  /**
-   * Get current threshold
-   */
   getThreshold(): number {
-    return this.config.criticalThreshold;
+    return this.threshold;
   }
   
   /**
-   * Update buffer level (called by stream processors)
+   * Update current buffer level (used by management suite)
    */
-  updateBufferLevel(level: number): void {
-    // Ensure buffer level is not negative
-    this.bufferLevel = Math.max(0, level);
-    this.checkPressure();
+  updateBufferLevel(currentLevel: number): void {
+    const previousLevel = this.bufferLevel;
+    this.bufferLevel = Math.max(0, currentLevel);
+    
+    const levelRatio = this.getBufferLevel();
+    const previousState = this.currentState;
+    
+    // Check for overflow (when buffer level exceeds blocking threshold)
+    if (levelRatio >= this.config.blockingThreshold) {
+      this.bufferOverflows++;
+      this.addEvent({
+        type: 'OVERFLOW',
+        timestamp: Date.now(),
+        state: this.currentState,
+        bufferLevel: levelRatio,
+        details: `Buffer overflow: ${(levelRatio * 100).toFixed(1)}% >= ${(this.config.blockingThreshold * 100).toFixed(1)}%`
+      });
+    }
+    
+    // Update state based on new level
+    this.updateStateFromBufferLevel();
+    
+    // Auto-pause if above blocking threshold
+    if (levelRatio >= this.config.blockingThreshold && !this.isPaused) {
+      this.pause();
+      this.pressureEvents++;
+      this.notifyPressureCallbacks();
+    }
+    // Auto-resume if below warning threshold and currently paused
+    else if (levelRatio < this.config.warningThreshold && this.isPaused) {
+      this.resume();
+    }
+    
+    // Track state changes
+    if (previousState !== this.currentState) {
+      this.addEvent({
+        type: 'STATE_CHANGE',
+        timestamp: Date.now(),
+        state: this.currentState,
+        bufferLevel: levelRatio,
+        details: `State change from ${previousState} to ${this.currentState}`
+      });
+    }
+    
+    this.updateStatistics();
   }
   
   /**
-   * Get current backpressure state
+   * Get current state
    */
-  getCurrentState(): BackpressureState {
+  getCurrentState(): BackpressureState | string {
     return this.currentState;
   }
   
   /**
-   * Get pressure statistics
+   * Get detailed statistics
    */
-  getStatistics(): {
-    pressureEvents: number;
-    totalPressureTime: number;
-    averagePressureTime: number;
-    longestPressureEvent: number;
-    bufferOverflows: number;
-    memoryWarnings: number;
-    currentState: BackpressureState;
-    isPaused: boolean;
-  } {
-    const currentPressureTime = this.pressureStartTime > 0 
-      ? Date.now() - this.pressureStartTime 
-      : 0;
-    
-    const totalTime = this.stats.totalPressureTime + currentPressureTime;
-    
-    return {
-      pressureEvents: this.stats.pressureEvents,
-      totalPressureTime: totalTime,
-      averagePressureTime: this.stats.pressureEvents > 0 
-        ? totalTime / this.stats.pressureEvents 
-        : 0,
-      longestPressureEvent: Math.max(this.stats.longestPressureEvent, currentPressureTime),
-      bufferOverflows: this.stats.bufferOverflows,
-      memoryWarnings: this.stats.memoryWarnings,
-      currentState: this.currentState,
-      isPaused: this.isPaused
-    };
+  getStatistics(): BackpressureStatistics {
+    return { ...this.statistics };
   }
   
   /**
-   * Get recent events
+   * Get event history
    */
-  getEventHistory(limit: number = 10): BackpressureEvent[] {
-    return this.eventHistory.slice(-limit);
+  getEventHistory(limit?: number): BackpressureEvent[] {
+    const events = [...this.eventHistory];
+    return limit ? events.slice(-limit) : events;
   }
   
   /**
    * Stop monitoring and cleanup
    */
   stop(): void {
-    if (this.checkTimer) {
-      clearInterval(this.checkTimer);
-      this.checkTimer = undefined;
+    if (this.monitoringTimer) {
+      clearInterval(this.monitoringTimer);
+      this.monitoringTimer = undefined;
     }
-    
-    this.pressureCallbacks = [];
-    this.eventHistory = [];
     
     if (this.logger && this.config.enableLogging) {
       this.logger.debug('Backpressure controller stopped').catch(() => {});
@@ -271,224 +270,144 @@ export class BackpressureControllerImpl implements BackpressureController {
   }
   
   /**
-   * Start monitoring for backpressure conditions
+   * Start monitoring memory and buffer levels
    */
   private startMonitoring(): void {
-    this.checkTimer = setInterval(() => {
-      this.checkPressure();
+    this.monitoringTimer = setInterval(() => {
+      this.checkMemoryPressure();
     }, this.config.checkInterval);
-    
-    if (this.logger && this.config.enableLogging) {
-      this.logger.debug('Backpressure monitoring started', { 
-        interval: this.config.checkInterval 
-      }).catch(() => {});
-    }
   }
   
   /**
-   * Check for backpressure conditions
+   * Check for memory pressure and adjust state accordingly
    */
-  private checkPressure(): void {
-    const now = Date.now();
-    this.lastCheck = now;
-    
-    const bufferUtilization = this.getBufferLevel();
-    const memoryStats = getMemoryStats();
-    // Handle case where memory stats are unavailable (e.g., in test environment)
-    if (!memoryStats) {
-      // Use buffer-only pressure detection
-      this.applyPressureControls(bufferUtilization, 0);
-      const newState = this.calculateState(bufferUtilization, 0);
-      if (newState !== this.currentState) {
-        this.updateState(newState);
+  private checkMemoryPressure(): void {
+    try {
+      const memoryStats = this.getMemoryUsage();
+      if (!memoryStats) return;
+      
+      const memoryRatio = memoryStats.used / memoryStats.total;
+      
+      // Memory-based backpressure
+      if (memoryRatio > 0.9) {
+        this.memoryWarnings++;
+        
+        if (!this.isPaused) {
+          this.addEvent({
+            type: 'PRESSURE_START',
+            timestamp: Date.now(),
+            state: this.currentState,
+            bufferLevel: this.getBufferLevel(),
+            memoryUsage: memoryRatio,
+            details: 'Memory pressure detected'
+          });
+          
+          this.pause();
+          this.pressureEvents++;
+          this.notifyPressureCallbacks();
+        }
       }
-      return;
-    }
-    
-    const memoryUtilization = memoryStats.used / memoryStats.total;
-    
-    // Apply backpressure controls first
-    this.applyPressureControls(bufferUtilization, memoryUtilization);
-    
-    // Then determine appropriate state based on current conditions
-    const newState = this.calculateState(bufferUtilization, memoryUtilization);
-    
-    // Update state to reflect current conditions
-    if (newState !== this.currentState) {
-      this.updateState(newState);
-    }
-    
-    // Log periodic status if enabled
-    if (this.logger && this.config.enableLogging && now % 10000 < this.config.checkInterval) {
-      this.logger.debug('Backpressure status', {
-        state: this.currentState,
-        bufferLevel: bufferUtilization.toFixed(3),
-        memoryUsage: memoryUtilization.toFixed(3),
-        isPaused: this.isPaused
-      }).catch(() => {});
+    } catch (error) {
+      if (this.logger) {
+        this.logger.warn('Error checking memory pressure', error).catch(() => {});
+      }
     }
   }
   
   /**
-   * Calculate appropriate backpressure state based purely on current conditions
+   * Update state based on current buffer level
    */
-  private calculateState(
-    bufferUtilization?: number, 
-    memoryUtilization?: number
-  ): BackpressureState {
-    const bufferLevel = bufferUtilization ?? this.getBufferLevel();
-    let memoryLevel = memoryUtilization;
+  private updateStateFromBufferLevel(): void {
+    const levelRatio = this.getBufferLevel();
     
-    // Handle case where memory stats are unavailable
-    if (memoryLevel === undefined) {
-      const memoryStats = getMemoryStats();
-      memoryLevel = memoryStats ? (memoryStats.used / memoryStats.total) : 0;
-    }
-    
-    // Calculate state purely based on current levels (ignore pause state)
-    if (bufferLevel >= this.config.blockingThreshold || memoryLevel >= this.config.memoryThreshold) {
-      return BackpressureState.BLOCKED;
-    } else if (bufferLevel >= this.config.criticalThreshold || memoryLevel >= this.config.memoryThreshold * 0.9) {
-      return BackpressureState.CRITICAL;
-    } else if (bufferLevel >= this.config.warningThreshold || memoryLevel >= this.config.memoryThreshold * 0.8) {
-      return BackpressureState.WARNING;
+    if (this.isPaused) {
+      this.currentState = BackpressureState.BLOCKED;
+    } else if (levelRatio >= this.config.criticalThreshold) {
+      this.currentState = BackpressureState.CRITICAL;
+    } else if (levelRatio >= this.config.warningThreshold) {
+      this.currentState = BackpressureState.WARNING;
     } else {
-      return BackpressureState.NORMAL;
+      this.currentState = BackpressureState.NORMAL;
     }
   }
   
   /**
-   * Update backpressure state and handle transitions
+   * Add event to history with size limiting
    */
-  private updateState(newState: BackpressureState): void {
-    const previousState = this.currentState;
-    this.currentState = newState;
-    
-    // Handle pressure start/end events
-    if (previousState === BackpressureState.NORMAL && newState !== BackpressureState.NORMAL) {
-      this.pressureStartTime = Date.now();
-      this.stats.pressureEvents++;
-    } else if (previousState !== BackpressureState.NORMAL && newState === BackpressureState.NORMAL) {
-      if (this.pressureStartTime > 0) {
-        const pressureDuration = Date.now() - this.pressureStartTime;
-        this.stats.totalPressureTime += pressureDuration;
-        this.stats.longestPressureEvent = Math.max(this.stats.longestPressureEvent, pressureDuration);
-        this.pressureStartTime = 0;
-      }
-    }
-    
-    if (this.logger && this.config.enableLogging && previousState !== newState) {
-      const memoryStats = getMemoryStats();
-      this.logger.info('Backpressure state changed', {
-        from: previousState,
-        to: newState,
-        bufferLevel: this.getBufferLevel(),
-        memoryUsage: memoryStats ? (memoryStats.used / memoryStats.total) : 0
-      }).catch(() => {});
-    }
-  }
-  
-  /**
-   * Apply backpressure controls based on current conditions
-   */
-  private applyPressureControls(bufferUtilization: number, memoryUtilization: number): void {
-    // Determine if conditions warrant pausing
-    const shouldBePaused = bufferUtilization >= this.config.blockingThreshold || 
-                          memoryUtilization >= this.config.memoryThreshold;
-    
-    // Determine if conditions allow resuming (use release threshold for hysteresis)
-    const shouldBeResumed = bufferUtilization <= this.config.releaseThreshold && 
-                           memoryUtilization <= this.config.memoryThreshold * 0.7;
-    
-    // Handle automatic pausing - only auto-pause if not manually paused
-    if (shouldBePaused && !this.isPaused && !this.manuallyPaused) {
-      this.isPaused = true;
-      if (bufferUtilization >= this.config.blockingThreshold) {
-        this.stats.bufferOverflows++;
-        this.emitEvent('buffer_full', { bufferLevel: bufferUtilization });
-      }
-      if (memoryUtilization >= this.config.memoryThreshold) {
-        this.stats.memoryWarnings++;
-        this.emitEvent('memory_critical', { memoryUsage: memoryUtilization });
-      }
-    }
-    
-    // Handle automatic resuming - only auto-resume if auto-paused (not manually paused)
-    if (shouldBeResumed && this.isPaused && !this.manuallyPaused) {
-      this.isPaused = false;
-    }
-  }
-  
-  /**
-   * Emit backpressure event
-   */
-  private emitEvent(type: BackpressureEvent['type'], details?: Record<string, any>): void {
-    const memoryStats = getMemoryStats();
-    const event: BackpressureEvent = {
-      type,
-      timestamp: Date.now(),
-      state: this.currentState,
-      bufferLevel: this.getBufferLevel(),
-      memoryUsage: memoryStats ? (memoryStats.used / memoryStats.total) : 0,
-      details
-    };
-    
+  private addEvent(event: BackpressureEvent): void {
     this.eventHistory.push(event);
     
-    // Keep only recent events
+    // Limit history size
     if (this.eventHistory.length > 100) {
-      this.eventHistory = this.eventHistory.slice(-50);
+      this.eventHistory = this.eventHistory.slice(-100);
     }
-    
-    // Notify callbacks
-    this.pressureCallbacks.forEach(callback => {
+  }
+  
+  /**
+   * Update statistics
+   */
+  private updateStatistics(): void {
+    this.statistics = {
+      currentState: this.currentState,
+      pressureEvents: this.pressureEvents,
+      totalPressureTime: this.totalPressureTime,
+      averagePressureTime: this.pressureEvents > 0 ? this.totalPressureTime / this.pressureEvents : 0,
+      isPaused: this.isPaused,
+      bufferOverflows: this.bufferOverflows,
+      memoryWarnings: this.memoryWarnings
+    };
+  }
+  
+  /**
+   * Notify pressure callbacks
+   */
+  private notifyPressureCallbacks(): void {
+    for (const callback of this.pressureCallbacks) {
       try {
         callback();
       } catch (error) {
         if (this.logger) {
-          this.logger.warn('Backpressure callback error', error).catch(() => {});
+          this.logger.warn('Pressure callback error', error).catch(() => {});
         }
       }
-    });
+    }
   }
 }
 
-/**
- * Create a backpressure controller
- */
 export function createBackpressureController(
-  config: Partial<BackpressureConfig> = {},
-  dependencies: { logger?: any; maxBufferSize?: number } = {}
+  config: BackpressureConfig = {},
+  options: any = {}
 ): BackpressureController {
-  return new BackpressureControllerImpl(config, dependencies);
+  try {
+    const controller = new BackpressureControllerImpl(config, options);
+    return controller;
+  } catch (error) {
+    console.error('Failed to create BackpressureController:', error);
+    throw error;
+  }
 }
 
-/**
- * Create a backpressure controller with enhanced monitoring
- */
 export function createEnhancedBackpressureController(
-  config: Partial<BackpressureConfig> = {},
-  dependencies: { 
-    logger?: any; 
-    maxBufferSize?: number;
-    enableDetailedLogging?: boolean;
-    metricsCallback?: (stats: any) => void;
-  } = {}
+  config: BackpressureConfig = {},
+  options: any = {}
 ): BackpressureController {
-  const enhancedConfig = {
-    ...config,
-    enableLogging: dependencies.enableDetailedLogging ?? config.enableLogging ?? false
-  };
-  
-  const controller = new BackpressureControllerImpl(enhancedConfig, dependencies);
-  
-  // Add metrics reporting if callback provided
-  if (dependencies.metricsCallback) {
-    setInterval(() => {
-      const stats = (controller as BackpressureControllerImpl).getStatistics();
-      dependencies.metricsCallback!(stats);
-    }, 5000);
+  try {
+    // Enhanced version with additional features
+    const enhancedConfig = {
+      ...config,
+      enableLogging: true,
+      checkInterval: config.checkInterval || 500 // More frequent monitoring
+    };
+    
+    const controller = new BackpressureControllerImpl(enhancedConfig, {
+      ...options,
+      enableDetailedLogging: true
+    });
+    
+    return controller;
+  } catch (error) {
+    console.error('Failed to create Enhanced BackpressureController:', error);
+    // Fall back to basic controller
+    return createBackpressureController(config, options);
   }
-  
-  return controller;
 }

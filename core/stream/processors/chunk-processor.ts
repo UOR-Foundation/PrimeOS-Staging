@@ -14,6 +14,7 @@ import {
 } from '../types';
 
 import { calculateMemoryUsage } from '../utils';
+import { MathUtilities, createCache, memoizeAsync } from '../../precision';
 
 /**
  * Default configuration for chunk processing
@@ -206,7 +207,34 @@ export class ChunkProcessorImpl<T> implements ChunkProcessor<T> {
   }
   
   private estimateBufferSize(): number {
-    return this.buffer.length * 64; // Rough estimate: 64 bytes per item
+    // Use precision module for accurate memory calculation
+    if (this.buffer.length === 0) return 0;
+    
+    // Calculate memory usage based on actual data types and precision requirements
+    let totalSize = 0;
+    
+    // Base memory overhead for array structure
+    totalSize += 32; // Array object overhead
+    
+    // Calculate memory for each item
+    for (const item of this.buffer) {
+      if (typeof item === 'bigint') {
+        // Use precision module's bit length for accurate BigInt memory calculation
+        const bits = MathUtilities.bitLength(item);
+        totalSize += Math.ceil(bits / 8) + 16; // Memory for BigInt + object overhead
+      } else if (typeof item === 'number') {
+        totalSize += 8; // 64-bit number
+      } else if (typeof item === 'string') {
+        totalSize += (item as string).length * 2 + 32; // UTF-16 + string overhead
+      } else if (typeof item === 'object' && item !== null) {
+        // Estimate object size
+        totalSize += JSON.stringify(item).length * 2 + 64;
+      } else {
+        totalSize += 32; // Default estimate for other types
+      }
+    }
+    
+    return totalSize;
   }
 }
 

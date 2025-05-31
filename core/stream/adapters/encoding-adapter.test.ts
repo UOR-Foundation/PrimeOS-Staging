@@ -127,26 +127,22 @@ describe('EncodingStreamAdapter', () => {
       expect(mockEncodingModule.encodeText).toHaveBeenCalledWith('world');
     });
 
-    it('should use fallback encoding when no module is configured', async () => {
+    it('should throw error when no module is configured', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
       const input = ['hello'];
       const stream = adapter.encodeTextStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result.length).toBe(1);
-      expect(typeof result[0]).toBe('bigint');
-      expect(result[0].toString(16)).toBe('68656c6c6f'); // 'hello' in hex
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for text encoding');
     });
 
-    it('should handle empty strings', async () => {
+    it('should throw error for empty strings when no module configured', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
       const input = [''];
       const stream = adapter.encodeTextStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result).toEqual([0n]);
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for text encoding');
     });
 
     it('should track statistics', async () => {
@@ -190,39 +186,31 @@ describe('EncodingStreamAdapter', () => {
       expect(mockEncodingModule.decodeText).toHaveBeenCalledWith([456n]);
     });
 
-    it('should use fallback decoding when module fails', async () => {
+    it('should throw error when module fails', async () => {
       mockEncodingModule.decodeText = jest.fn().mockRejectedValue(new Error('Decode failed'));
 
-      const hex = BigInt('0x' + Buffer.from('hello', 'utf8').toString('hex'));
-      const input = [hex];
+      const input = [123n];
       const stream = adapter.decodeTextStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result).toEqual(['hello']);
-      expect(mockLogger.warn).toHaveBeenCalled();
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Failed to decode text chunk');
     });
 
-    it('should use fallback decoding when no module is configured', async () => {
+    it('should throw error when no module is configured', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
-      const hex = BigInt('0x' + Buffer.from('test', 'utf8').toString('hex'));
-      const input = [hex];
+      const input = [123n];
       const stream = adapter.decodeTextStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result).toEqual(['test']);
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for text decoding');
     });
 
-    it('should handle invalid hex in fallback', async () => {
+    it('should require encoding module for all operations', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
       const input = [123456789n];
       const stream = adapter.decodeTextStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result.length).toBe(1);
-      expect(result[0]).toBeTruthy();
-      expect(result[0].length).toBeGreaterThan(0);
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for text decoding');
     });
 
     it('should track statistics', async () => {
@@ -248,29 +236,22 @@ describe('EncodingStreamAdapter', () => {
       expect(mockEncodingModule.decodeChunk).toHaveBeenCalledWith(123n);
     });
 
-    it('should use fallback when decoding fails', async () => {
+    it('should throw error when decoding fails', async () => {
       mockEncodingModule.decodeChunk = jest.fn().mockRejectedValue(new Error('Decode failed'));
 
       const input = [12345678n];
       const stream = adapter.decodeChunkStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result.length).toBe(1);
-      expect(result[0].type).toBe(ChunkType.DATA);
-      expect(result[0].checksum).toBe(12345678n & 0xFFFFn);
-      expect(mockLogger.warn).toHaveBeenCalled();
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Failed to decode chunk structure');
     });
 
-    it('should use fallback when no module is configured', async () => {
+    it('should throw error when no module is configured', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
       const input = [99999n];
       const stream = adapter.decodeChunkStream(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result.length).toBe(1);
-      expect(result[0].type).toBe(ChunkType.DATA);
-      expect(result[0].data.value).toBe(99999);
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for chunk decoding');
     });
 
     it('should track statistics', async () => {
@@ -294,25 +275,22 @@ describe('EncodingStreamAdapter', () => {
       expect(mockEncodingModule.executeProgram).toHaveBeenCalledWith([111n, 222n, 333n]);
     });
 
-    it('should use fallback when execution fails', async () => {
+    it('should throw error when execution fails', async () => {
       mockEncodingModule.executeProgram = jest.fn().mockRejectedValue(new Error('Execute failed'));
 
       const input = [111n, 222n];
       const stream = adapter.executeStreamingProgram(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result).toEqual(['Executed chunk: 111', 'Executed chunk: 222']);
-      expect(mockLogger.warn).toHaveBeenCalled();
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Execute failed');
     });
 
-    it('should use fallback when no module is configured', async () => {
+    it('should throw error when no module is configured', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
       const input = [555n];
       const stream = adapter.executeStreamingProgram(arrayToAsyncIterable(input));
-      const result = await collectAsyncIterable(stream);
-
-      expect(result).toEqual(['Executed chunk: 555']);
+      
+      await expect(collectAsyncIterable(stream)).rejects.toThrow('Encoding module is required for program execution');
     });
 
     it('should track statistics', async () => {
@@ -384,22 +362,19 @@ describe('EncodingStreamAdapter', () => {
       expect(stats.textChunksDecoded).toBe(0);
       expect(stats.chunksDecoded).toBe(0);
       expect(stats.programsExecuted).toBe(0);
-      expect(stats.fallbacksUsed).toBe(0);
+      expect(stats.errors).toBe(0);
       expect(stats.errors).toBe(0);
       expect(stats.totalProcessingTime).toBe(0);
     });
 
-    it('should track fallback usage', async () => {
+    it('should require encoding module for all operations', async () => {
       adapter = new EncodingStreamAdapter({ logger: mockLogger });
       
-      // All operations should use fallback
-      await collectAsyncIterable(adapter.encodeTextStream(arrayToAsyncIterable(['test'])));
-      await collectAsyncIterable(adapter.decodeTextStream(arrayToAsyncIterable([123n])));
-      await collectAsyncIterable(adapter.decodeChunkStream(arrayToAsyncIterable([456n])));
-      await collectAsyncIterable(adapter.executeStreamingProgram(arrayToAsyncIterable([789n])));
-
-      const stats = adapter.getStats();
-      expect(stats.fallbacksUsed).toBe(4);
+      // All operations should fail without encoding module
+      await expect(collectAsyncIterable(adapter.encodeTextStream(arrayToAsyncIterable(['test'])))).rejects.toThrow('Encoding module is required');
+      await expect(collectAsyncIterable(adapter.decodeTextStream(arrayToAsyncIterable([123n])))).rejects.toThrow('Encoding module is required');
+      await expect(collectAsyncIterable(adapter.decodeChunkStream(arrayToAsyncIterable([456n])))).rejects.toThrow('Encoding module is required');
+      await expect(collectAsyncIterable(adapter.executeStreamingProgram(arrayToAsyncIterable([789n])))).rejects.toThrow('Encoding module is required');
     });
   });
 });

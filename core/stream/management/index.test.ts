@@ -7,133 +7,7 @@
  * with coordinated optimization capabilities.
  */
 
-// Create a complete mock optimizer with all required methods
-const createMockOptimizer = () => ({
-  adaptChunkSize: jest.fn().mockReturnValue(4096),
-  adaptConcurrency: jest.fn().mockReturnValue(8),
-  adaptBufferSize: jest.fn().mockReturnValue(4096),
-  optimizeConcurrency: jest.fn().mockReturnValue(8),
-  adjustBufferSizes: jest.fn().mockReturnValue({
-    inputBufferSize: 8192,
-    outputBufferSize: 8192,
-    intermediateBufferSize: 4096,
-    backpressureThreshold: 0.8
-  }),
-  enableProfiling: jest.fn(),
-  disableProfiling: jest.fn(),
-  getPerformanceReport: jest.fn().mockReturnValue({
-    summary: {
-      averageThroughput: 750,
-      peakThroughput: 1200,
-      averageLatency: 25,
-      errorRate: 0.01
-    },
-    bottlenecks: [],
-    recommendations: ['Increase buffer sizes for better throughput'],
-    historicalTrends: []
-  }),
-  suggestOptimizations: jest.fn().mockReturnValue([]),
-  setOptimizationStrategy: jest.fn(),
-  getOptimizationStrategy: jest.fn().mockReturnValue('balanced'),
-  updateMetrics: jest.fn(),
-  stop: jest.fn()
-});
-
-// Define mocks at module level before any imports
-const mockOptimizer = createMockOptimizer();
-
-const mockBackpressureController = {
-  pause: jest.fn(),
-  resume: jest.fn(),
-  drain: jest.fn().mockResolvedValue(undefined),
-  getBufferLevel: jest.fn().mockReturnValue(0.5),
-  getMemoryUsage: jest.fn().mockReturnValue({
-    used: 200 * 1024 * 1024,
-    available: 300 * 1024 * 1024,
-    total: 500 * 1024 * 1024,
-    bufferSize: 10 * 1024,
-    gcCollections: 3
-  }),
-  onPressure: jest.fn(),
-  setThreshold: jest.fn(),
-  getThreshold: jest.fn().mockReturnValue(0.8),
-  getStatistics: jest.fn().mockReturnValue({
-    currentState: 'NORMAL',
-    pressureEvents: 5,
-    totalPressureTime: 1000,
-    isPaused: false,
-    bufferOverflows: 0,
-    memoryWarnings: 0
-  }),
-  stop: jest.fn()
-};
-
-const mockMemoryManager = {
-  registerBuffer: jest.fn(),
-  updateBufferSize: jest.fn().mockReturnValue(true),
-  releaseBuffer: jest.fn().mockReturnValue(true),
-  getOptimalBufferSize: jest.fn().mockReturnValue(4096),
-  triggerGC: jest.fn(),
-  getMemoryStats: jest.fn().mockReturnValue({
-    used: 200 * 1024 * 1024,
-    available: 300 * 1024 * 1024,
-    total: 500 * 1024 * 1024,
-    bufferSize: 10 * 1024,
-    gcCollections: 3
-  }),
-  getBufferStats: jest.fn().mockReturnValue({
-    totalAllocated: 50 * 1024,
-    totalReleased: 10 * 1024,
-    activeBuffers: 5,
-    peakUsage: 60 * 1024,
-    averageBufferSize: 8192,
-    totalBufferMemory: 40 * 1024
-  }),
-  getManagementStats: jest.fn().mockReturnValue({
-    strategy: 'BALANCED',
-    gcTriggers: 3,
-    pressureEvents: 2,
-    totalPressureTime: 500,
-    averagePressureTime: 250,
-    leaksDetected: 0,
-    bufferAdjustments: 8,
-    peakMemoryUsage: 250 * 1024 * 1024,
-    averageMemoryUsage: 200 * 1024 * 1024
-  }),
-  onMemoryPressure: jest.fn(),
-  onGC: jest.fn(),
-  getEventHistory: jest.fn().mockReturnValue([]),
-  setStrategy: jest.fn(),
-  stop: jest.fn()
-};
-
-// Mock all modules with direct return values
-jest.mock('./backpressure-controller', () => ({
-  BackpressureControllerImpl: jest.fn(() => mockBackpressureController),
-  createBackpressureController: jest.fn(() => mockBackpressureController),
-  createEnhancedBackpressureController: jest.fn(() => mockBackpressureController)
-}));
-
-jest.mock('./memory-manager', () => ({
-  MemoryManager: jest.fn(() => mockMemoryManager),
-  createMemoryManager: jest.fn(() => mockMemoryManager),
-  createOptimizedMemoryManager: jest.fn(() => mockMemoryManager)
-}));
-
-jest.mock('./performance-optimizer', () => ({
-  PerformanceOptimizerImpl: jest.fn().mockImplementation(() => createMockOptimizer()),
-  createPerformanceOptimizer: jest.fn().mockImplementation(() => createMockOptimizer()),
-  createStrategyOptimizer: jest.fn().mockImplementation(() => createMockOptimizer()),
-  OptimizationStrategy: {
-    THROUGHPUT: 'throughput',
-    LATENCY: 'latency',
-    MEMORY: 'memory',
-    BALANCED: 'balanced',
-    CUSTOM: 'custom'
-  }
-}));
-
-// Now import after mocks are set up
+// Import the functions directly - we'll test with real implementations
 import { 
   createStreamManagementSuite,
   createWorkloadOptimizedSuite,
@@ -473,13 +347,15 @@ describe('Stream Management Suite', () => {
     });
     
     test('should create minimal lightweight suite', async () => {
+      // In production, memory management cannot be disabled - test with minimal config instead
       const minimalSuite = createLightweightManagementSuite({
         enableBackpressure: true,
-        enableMemoryManagement: false,
+        enableMemoryManagement: true, // Required in production
         enablePerformanceOptimization: false
       });
       
       expect(minimalSuite).toBeDefined();
+      expect(minimalSuite.memoryManager).toBeDefined(); // Memory manager is always required
       await minimalSuite.stop();
     });
     
@@ -516,19 +392,32 @@ describe('Stream Management Suite', () => {
   
   describe('Configuration Edge Cases', () => {
     test('should handle disabled components', async () => {
-      const disabledSuite = createStreamManagementSuite({
-        backpressure: { enabled: false },
-        memory: { enabled: false },
-        performance: { enabled: false }
+      // In production, backpressure and memory management are required - test with performance disabled only
+      expect(() => {
+        createStreamManagementSuite({
+          backpressure: { enabled: false },
+          memory: { enabled: false },
+          performance: { enabled: false }
+        });
+      }).toThrow('Backpressure controller is required - cannot be disabled');
+      
+      // Test with only performance disabled (which is allowed)
+      const partiallyDisabledSuite = createStreamManagementSuite({
+        backpressure: { enabled: true },
+        memory: { enabled: true },
+        performance: { enabled: false } // This is allowed
       });
       
-      expect(disabledSuite).toBeDefined();
+      expect(partiallyDisabledSuite).toBeDefined();
+      expect(partiallyDisabledSuite.backpressureController).toBeDefined();
+      expect(partiallyDisabledSuite.memoryManager).toBeDefined();
+      expect(partiallyDisabledSuite.performanceOptimizer).toBeDefined(); // Still created but with limited functionality
       
       // Should still provide basic functionality
-      const stats = disabledSuite.getOverallStats();
+      const stats = partiallyDisabledSuite.getOverallStats();
       expect(stats).toBeDefined();
       
-      await disabledSuite.stop();
+      await partiallyDisabledSuite.stop();
     });
     
     test('should handle partial configuration', async () => {

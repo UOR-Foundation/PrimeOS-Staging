@@ -58,6 +58,10 @@ import {
   calculateBufferSize,
   MemoryMonitor 
 } from './utils/memory-utils';
+import { PerformanceMonitor, getPerformanceMonitor } from './utils/performance-monitor';
+import { OPTIMIZATION_THRESHOLDS, STREAM_DEFAULTS } from './constants';
+import { PrimeRegistryAdapter, createPrimeRegistryAdapter } from './adapters/prime-registry-adapter';
+import { IntegrityAdapter, createIntegrityAdapter } from './adapters/integrity-registry-adapter';
 
 /**
  * Adapter for encoding module integration
@@ -108,50 +112,9 @@ class EncodingModuleAdapter {
 }
 
 /**
- * Adapter for prime registry integration
- */
-class PrimeRegistryAdapter {
-  constructor(private primeRegistry: any) {}
-  
-  async ensureInitialized(): Promise<void> {
-    if (typeof this.primeRegistry.initialize === 'function' && 
-        typeof this.primeRegistry.getState === 'function') {
-      const state = this.primeRegistry.getState();
-      if (state.lifecycle !== 'Ready') {
-        const result = await this.primeRegistry.initialize();
-        if (!result.success) {
-          throw new StreamProcessingError(`Failed to initialize prime registry: ${result.error}`);
-        }
-      }
-    }
-  }
-  
-  async factor(n: bigint): Promise<any[]> {
-    if (typeof this.primeRegistry.factor !== 'function') {
-      throw new StreamProcessingError('Prime registry missing factor method');
-    }
-    return this.primeRegistry.factor(n);
-  }
-  
-  isPrime(n: bigint): boolean {
-    if (typeof this.primeRegistry.isPrime !== 'function') {
-      throw new StreamProcessingError('Prime registry missing isPrime method');
-    }
-    return this.primeRegistry.isPrime(n);
-  }
-  
-  getPrime(index: number): bigint {
-    if (typeof this.primeRegistry.getPrime !== 'function') {
-      throw new StreamProcessingError('Prime registry missing getPrime method');
-    }
-    return this.primeRegistry.getPrime(index);
-  }
-}
-
-/**
  * Default options for stream processing
  */
-const DEFAULT_OPTIONS: Required<Omit<StreamOptions, keyof ModelOptions | 'encodingModule' | 'primeRegistry' | 'bandsOptimizer'>> = {
+const DEFAULT_OPTIONS: Required<Omit<StreamOptions, keyof ModelOptions | 'encodingModule' | 'primeRegistry' | 'bandsOptimizer' | 'performanceMonitor'>> = {
   defaultChunkSize: 1024,
   maxConcurrency: 4,
   memoryLimit: 100 * 1024 * 1024, // 100MB
@@ -194,6 +157,7 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
   };
   
   private memoryMonitor: MemoryMonitor;
+  private performanceMonitor: PerformanceMonitor;
   private backpressureController?: BackpressureController;
   private encodingAdapter?: EncodingModuleAdapter;
   private primeAdapter?: PrimeRegistryAdapter;
@@ -203,7 +167,9 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
     chunksProcessed: 0,
     pipelinesExecuted: 0,
     bytesProcessed: 0,
-    averageProcessingTime: 0
+    averageProcessingTime: 0,
+    errors: 0,
+    backpressureEvents: 0
   };
   
   constructor(options: StreamOptions = {}) {
@@ -239,10 +205,13 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
       this.encodingAdapter = new EncodingModuleAdapter(this.config.encodingModule);
     }
     if (this.config.primeRegistry) {
-      this.primeAdapter = new PrimeRegistryAdapter(this.config.primeRegistry);
+      this.primeAdapter = createPrimeRegistryAdapter(this.config.primeRegistry, {
+        logger: undefined // Will be set during initialization
+      });
     }
     
     this.memoryMonitor = new MemoryMonitor();
+    this.performanceMonitor = options.performanceMonitor || getPerformanceMonitor();
   }
   
   /**
@@ -323,7 +292,9 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
       chunksProcessed: 0,
       pipelinesExecuted: 0,
       bytesProcessed: 0,
-      averageProcessingTime: 0
+      averageProcessingTime: 0,
+      errors: 0,
+      backpressureEvents: 0
     };
     
     this.memoryMonitor.reset();
@@ -500,15 +471,16 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
   }
   
   getMetrics(): StreamPerformanceMetrics {
+    const perfMetrics = this.performanceMonitor.getMetrics();
     return {
-      throughput: this.stats.streamsCreated / (this.getUptime() / 1000) || 0,
-      latency: this.stats.averageProcessingTime,
-      memoryUsage: getMemoryStats().used,
-      errorRate: 0, // Would track actual errors
-      backpressureEvents: 0, // Would track backpressure
-      cacheHitRate: 0,
-      cpuUsage: 0,
-      ioWaitTime: 0
+      throughput: perfMetrics.throughput || (this.stats.streamsCreated / (this.getUptime() / 1000) || 0),
+      latency: perfMetrics.latency || this.stats.averageProcessingTime,
+      memoryUsage: perfMetrics.memoryUsage || getMemoryStats().used,
+      errorRate: perfMetrics.errorRate || (this.stats.errors / Math.max(1, this.stats.chunksProcessed)),
+      backpressureEvents: perfMetrics.backpressureEvents || this.stats.backpressureEvents,
+      cacheHitRate: perfMetrics.cacheHitRate,
+      cpuUsage: perfMetrics.cpuUsage,
+      ioWaitTime: perfMetrics.ioWaitTime
     };
   }
   
@@ -520,34 +492,61 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
   
   async optimizePerformance(): Promise<OptimizationResult> {
     const metrics = this.getMetrics();
+    const memoryUsageRatio = metrics.memoryUsage / this.config.memoryLimit;
     
-    // Basic optimization based on current metrics
+    // Use constants for optimization thresholds
     const recommendations = [];
+    let estimatedImprovement = 0;
+    const newConfig = { ...this.config };
     
-    if (metrics.memoryUsage > this.config.memoryLimit * 0.8) {
+    // Memory optimization
+    if (memoryUsageRatio > OPTIMIZATION_THRESHOLDS.MEMORY.HIGH) {
+      const newChunkSize = Math.floor(this.config.defaultChunkSize * STREAM_DEFAULTS.CHUNK_SIZE.ADAPTIVE_FACTOR);
       recommendations.push({
         type: 'configuration' as const,
-        priority: 'high' as const,
+        priority: memoryUsageRatio > OPTIMIZATION_THRESHOLDS.MEMORY.CRITICAL ? 'critical' as const : 'high' as const,
         description: 'Memory usage is high, consider reducing chunk size',
-        expectedImprovement: 15,
-        implementation: 'Reduce defaultChunkSize to ' + Math.floor(this.config.defaultChunkSize * 0.75)
+        expectedImprovement: OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.MEMORY_REDUCTION,
+        implementation: `Reduce defaultChunkSize to ${newChunkSize}`
       });
+      newConfig.defaultChunkSize = newChunkSize;
+      estimatedImprovement += OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.MEMORY_REDUCTION;
     }
     
-    if (metrics.throughput < 1000) {
+    // Throughput optimization
+    if (metrics.throughput < OPTIMIZATION_THRESHOLDS.THROUGHPUT.ACCEPTABLE) {
+      const newConcurrency = Math.min(
+        this.config.maxConcurrency + STREAM_DEFAULTS.CONCURRENCY.INCREMENT,
+        STREAM_DEFAULTS.CONCURRENCY.MAX
+      );
       recommendations.push({
         type: 'configuration' as const,
-        priority: 'medium' as const,
+        priority: metrics.throughput < OPTIMIZATION_THRESHOLDS.THROUGHPUT.POOR ? 'high' as const : 'medium' as const,
         description: 'Throughput is low, consider increasing concurrency',
-        expectedImprovement: 20,
-        implementation: 'Increase maxConcurrency to ' + (this.config.maxConcurrency + 2)
+        expectedImprovement: OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.THROUGHPUT_INCREASE,
+        implementation: `Increase maxConcurrency to ${newConcurrency}`
       });
+      newConfig.maxConcurrency = newConcurrency;
+      estimatedImprovement += OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.THROUGHPUT_INCREASE;
+    }
+    
+    // Latency optimization
+    if (metrics.latency > OPTIMIZATION_THRESHOLDS.LATENCY.ACCEPTABLE) {
+      recommendations.push({
+        type: 'resource' as const,
+        priority: metrics.latency > OPTIMIZATION_THRESHOLDS.LATENCY.POOR ? 'high' as const : 'medium' as const,
+        description: 'High latency detected, consider reducing buffer sizes',
+        expectedImprovement: OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.LATENCY_REDUCTION,
+        implementation: `Reduce bufferSize to ${Math.floor(this.config.bufferSize * 0.75)}`
+      });
+      newConfig.bufferSize = Math.floor(this.config.bufferSize * 0.75);
+      estimatedImprovement += OPTIMIZATION_THRESHOLDS.EXPECTED_IMPROVEMENT.LATENCY_REDUCTION;
     }
     
     return {
       success: true,
-      improvementPercentage: recommendations.length > 0 ? 10.0 : 0,
-      newConfiguration: { ...this.config },
+      improvementPercentage: Math.min(estimatedImprovement, 100),
+      newConfiguration: newConfig,
       benchmarkResults: [],
       recommendations
     };
@@ -578,7 +577,9 @@ export class StreamImplementation extends BaseModel implements StreamInterface {
     if (options.primeRegistry !== undefined) {
       this.config.primeRegistry = options.primeRegistry;
       if (options.primeRegistry) {
-        this.primeAdapter = new PrimeRegistryAdapter(options.primeRegistry);
+        this.primeAdapter = createPrimeRegistryAdapter(options.primeRegistry, {
+          logger: this.logger
+        });
       } else {
         this.primeAdapter = undefined;
       }

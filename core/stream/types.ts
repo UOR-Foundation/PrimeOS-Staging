@@ -140,7 +140,7 @@ export interface PrimeStreamProcessor {
   processPrimeStream(chunks: AsyncIterable<bigint>): Promise<ProcessedChunk[]>;
   
   // Factorization streaming
-  streamFactorization(numbers: AsyncIterable<bigint>): Promise<AsyncIterable<Factor[]>>;
+  streamFactorization(numbers: AsyncIterable<bigint>): AsyncIterable<Factor[]>;
   
   // Integrity verification streaming
   verifyStreamIntegrity(chunks: AsyncIterable<bigint>): Promise<VerificationResult[]>;
@@ -434,7 +434,7 @@ export enum OptimizationStrategy {
  */
 export interface OptimizationSuggestion {
   type: 'configuration' | 'algorithm' | 'resource';
-  priority: 'low' | 'medium' | 'high';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   description: string;
   expectedImprovement: number; // Percentage improvement
   implementation: string;
@@ -454,6 +454,7 @@ export interface StreamOptions extends ModelOptions {
   metricsInterval?: number;          // Metrics collection interval
   profilingEnabled?: boolean;        // Enable performance profiling
   optimizationStrategy?: OptimizationStrategy; // Optimization approach
+  performanceMonitor?: any;          // Performance monitor instance
   
   // Error handling
   retryAttempts?: number;            // Default retry attempts

@@ -33,11 +33,14 @@ import {
   PerformanceOptimizerImpl, 
   createPerformanceOptimizer, 
   createStrategyOptimizer,
-  PerformanceOptimizerConfig,
-  OptimizationStrategy
+  PerformanceOptimizerConfig
 } from './performance-optimizer';
 
-import { StreamOptimizer, BackpressureController } from '../types';
+import { StreamOptimizer, BackpressureController, OptimizationStrategy } from '../types';
+import { PrimeRegistryAdapter, createPrimeRegistryAdapter } from '../adapters/prime-registry-adapter';
+import { IntegrityAdapter, createIntegrityAdapter } from '../adapters/integrity-registry-adapter';
+import { EncodingStreamAdapter, createEncodingStreamAdapter } from '../adapters/encoding-adapter';
+import { EncodingStreamBridge } from '../types';
 
 /**
  * Configuration for complete management suite
@@ -57,6 +60,11 @@ export interface ManagementSuiteConfig {
   performance?: Partial<PerformanceOptimizerConfig> & {
     enabled?: boolean;
   };
+  
+  // Optional core module integrations
+  primeRegistry?: any;
+  integrityModule?: any;
+  encodingModule?: any;
   
   // Global settings
   enableDetailedLogging?: boolean;
@@ -103,6 +111,11 @@ export interface StreamManagementSuite {
   memoryManager: MemoryManager;
   performanceOptimizer: StreamOptimizer;
   
+  // Optional core module adapters
+  primeAdapter?: PrimeRegistryAdapter;
+  integrityAdapter?: IntegrityAdapter;
+  encodingAdapter?: EncodingStreamBridge;
+  
   // Unified interface methods
   getOverallStats(): ManagementSuiteStats;
   enableCoordinatedOptimization(): void;
@@ -124,6 +137,11 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
   public memoryManager: MemoryManager;
   public performanceOptimizer: StreamOptimizer;
   
+  // Optional core module adapters
+  public primeAdapter?: PrimeRegistryAdapter;
+  public integrityAdapter?: IntegrityAdapter;
+  public encodingAdapter?: EncodingStreamBridge;
+  
   private config: ManagementSuiteConfig;
   private logger?: any;
   private coordinatedOptimizationEnabled = false;
@@ -143,6 +161,9 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     this.memoryManager = this.createMemoryManager();
     this.performanceOptimizer = this.createPerformanceOptimizer();
     
+    // Create core module adapters if modules are provided
+    this.initializeCoreAdapters();
+    
     // Enable coordinated optimization if requested
     if (config.coordinatedOptimization) {
       this.enableCoordinatedOptimization();
@@ -153,35 +174,11 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    * Get comprehensive statistics from all components
    */
   getOverallStats(): ManagementSuiteStats {
-    // Safely get backpressure stats with fallback
-    const backpressureStats = (this.backpressureController as any)?.getStatistics ? 
-      (this.backpressureController as BackpressureControllerImpl).getStatistics() : 
-      {
-        currentState: BackpressureState?.NORMAL || 'normal',
-        pressureEvents: 0,
-        totalPressureTime: 0,
-        isPaused: false
-      };
+    // Get backpressure stats - require proper implementation
+    const backpressureStats = (this.backpressureController as BackpressureControllerImpl).getStatistics();
     
-    const memoryStats = this.memoryManager?.getManagementStats() || {
-      strategy: 'balanced' as any,
-      gcTriggers: 0,
-      pressureEvents: 0,
-      totalPressureTime: 0,
-      averagePressureTime: 0,
-      leaksDetected: 0,
-      bufferAdjustments: 0,
-      peakMemoryUsage: 0,
-      averageMemoryUsage: 0
-    };
-    const bufferStats = this.memoryManager?.getBufferStats() || {
-      totalAllocated: 0,
-      totalReleased: 0,
-      activeBuffers: 0,
-      peakUsage: 0,
-      averageBufferSize: 0,
-      totalBufferMemory: 0
-    };
+    const memoryStats = this.memoryManager.getManagementStats();
+    const bufferStats = this.memoryManager.getBufferStats();
     
     return {
       backpressure: {
@@ -192,14 +189,13 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       },
       memory: {
         strategy: memoryStats.strategy,
-        currentUsage: this.memoryManager?.getMemoryStats()?.used || 0,
+        currentUsage: this.memoryManager.getMemoryStats()?.used || 0,
         peakUsage: memoryStats.peakMemoryUsage,
         gcTriggers: memoryStats.gcTriggers,
         activeBuffers: bufferStats.activeBuffers
       },
       performance: {
-        strategy: (this.performanceOptimizer && typeof (this.performanceOptimizer as any).getOptimizationStrategy === 'function') ? 
-          (this.performanceOptimizer as any).getOptimizationStrategy() : 'balanced',
+        strategy: this.performanceOptimizer.getOptimizationStrategy(),
         currentThroughput: 0, // Would be updated from actual metrics
         averageLatency: 0, // Would be updated from actual metrics
         optimizationCount: 0 // Would track optimizations
@@ -257,23 +253,23 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    */
   setGlobalStrategy(strategy: 'conservative' | 'balanced' | 'aggressive' | 'adaptive'): void {
     try {
-      // Map global strategy to component-specific strategies using string values
+      // Map global strategy to component-specific strategies
       const strategyMapping = {
         conservative: {
-          memory: 'conservative',
-          performance: 'memory'
+          memory: MemoryStrategy.CONSERVATIVE,
+          performance: OptimizationStrategy.MEMORY
         },
         balanced: {
-          memory: 'balanced',
-          performance: 'balanced'
+          memory: MemoryStrategy.BALANCED,
+          performance: OptimizationStrategy.BALANCED
         },
         aggressive: {
-          memory: 'aggressive',
-          performance: 'throughput'
+          memory: MemoryStrategy.AGGRESSIVE,
+          performance: OptimizationStrategy.THROUGHPUT
         },
         adaptive: {
-          memory: 'adaptive',
-          performance: 'balanced'
+          memory: MemoryStrategy.ADAPTIVE,
+          performance: OptimizationStrategy.BALANCED
         }
       };
       
@@ -286,13 +282,9 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         return;
       }
       
-      // Use string values to avoid enum issues
-      if ((this.memoryManager as any).setStrategy) {
-        (this.memoryManager as any).setStrategy(mapping.memory);
-      }
-      if (this.performanceOptimizer && typeof (this.performanceOptimizer as any).setOptimizationStrategy === 'function') {
-        (this.performanceOptimizer as any).setOptimizationStrategy(mapping.performance);
-      }
+      // Apply strategies to components
+      this.memoryManager.setStrategy(mapping.memory);
+      this.performanceOptimizer.setOptimizationStrategy(mapping.performance);
       
       if (this.logger) {
         this.logger.info('Global strategy updated', { strategy }).catch(() => {});
@@ -311,23 +303,23 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     try {
       const workloadConfigs = {
         batch: {
-          memory: 'aggressive',
-          performance: 'throughput',
+          memory: MemoryStrategy.AGGRESSIVE,
+          performance: OptimizationStrategy.THROUGHPUT,
           backpressureThreshold: 0.95
         },
         streaming: {
-          memory: 'balanced',
-          performance: 'balanced',
+          memory: MemoryStrategy.BALANCED,
+          performance: OptimizationStrategy.BALANCED,
           backpressureThreshold: 0.8
         },
         interactive: {
-          memory: 'conservative',
-          performance: 'latency',
+          memory: MemoryStrategy.CONSERVATIVE,
+          performance: OptimizationStrategy.LATENCY,
           backpressureThreshold: 0.7
         },
         background: {
-          memory: 'conservative',
-          performance: 'memory',
+          memory: MemoryStrategy.CONSERVATIVE,
+          performance: OptimizationStrategy.MEMORY,
           backpressureThreshold: 0.9
         }
       };
@@ -340,13 +332,9 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         return;
       }
       
-      // Use string values to avoid enum issues
-      if ((this.memoryManager as any).setStrategy) {
-        (this.memoryManager as any).setStrategy(config.memory);
-      }
-      if (this.performanceOptimizer && typeof (this.performanceOptimizer as any).setOptimizationStrategy === 'function') {
-        (this.performanceOptimizer as any).setOptimizationStrategy(config.performance);
-      }
+      // Apply workload-specific strategies
+      this.memoryManager.setStrategy(config.memory);
+      this.performanceOptimizer.setOptimizationStrategy(config.performance);
       this.backpressureController.setThreshold(config.backpressureThreshold);
       
       if (this.logger) {
@@ -367,6 +355,9 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       this.logger.info('Starting stream management suite').catch(() => {});
     }
     
+    // Initialize core adapters if available
+    await this.initializeAdapters();
+    
     // Components start automatically in their constructors
     // This method is for any additional initialization
     
@@ -383,20 +374,17 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     
     this.disableCoordinatedOptimization();
     
-    // Stop individual components that have stop methods
-    if (this.memoryManager && this.memoryManager.stop) {
-      this.memoryManager.stop();
-    }
+    // Terminate core adapters
+    await this.terminateAdapters();
     
-    // Stop backpressure controller if it has a stop method
-    if (this.backpressureController && (this.backpressureController as any).stop) {
-      (this.backpressureController as any).stop();
-    }
+    // Stop individual components
+    this.memoryManager.stop();
     
-    // Stop performance optimizer if it has a stop method
-    if (this.performanceOptimizer && (this.performanceOptimizer as any).stop) {
-      (this.performanceOptimizer as any).stop();
-    }
+    // Stop backpressure controller
+    (this.backpressureController as any).stop();
+    
+    // Stop performance optimizer
+    (this.performanceOptimizer as any).stop();
   }
   
   /**
@@ -418,6 +406,106 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
     // Components would reset themselves as needed
   }
   
+  /**
+   * Initialize core module adapters
+   */
+  private initializeCoreAdapters(): void {
+    try {
+      // Create prime registry adapter if module provided
+      if (this.config.primeRegistry) {
+        this.primeAdapter = createPrimeRegistryAdapter(this.config.primeRegistry, {
+          logger: this.logger
+        });
+      }
+      
+      // Create integrity adapter if module provided
+      if (this.config.integrityModule) {
+        this.integrityAdapter = createIntegrityAdapter(this.config.integrityModule, {
+          logger: this.logger
+        });
+      }
+      
+      // Create encoding adapter if module provided
+      if (this.config.encodingModule) {
+        this.encodingAdapter = createEncodingStreamAdapter({
+          encodingModule: this.config.encodingModule,
+          logger: this.logger
+        });
+      }
+      
+      if (this.logger && (this.primeAdapter || this.integrityAdapter || this.encodingAdapter)) {
+        this.logger.debug('Core module adapters initialized', {
+          primeAdapter: !!this.primeAdapter,
+          integrityAdapter: !!this.integrityAdapter,
+          encodingAdapter: !!this.encodingAdapter
+        }).catch(() => {});
+      }
+    } catch (error) {
+      if (this.logger) {
+        this.logger.warn('Failed to initialize some core adapters', error).catch(() => {});
+      }
+    }
+  }
+  
+  /**
+   * Initialize core adapters asynchronously
+   */
+  private async initializeAdapters(): Promise<void> {
+    try {
+      // Initialize prime adapter
+      if (this.primeAdapter) {
+        await this.primeAdapter.ensureInitialized();
+      }
+      
+      // Initialize integrity adapter
+      if (this.integrityAdapter) {
+        await this.integrityAdapter.ensureInitialized();
+      }
+      
+      // Note: EncodingStreamAdapter doesn't have ensureInitialized method
+      // It's initialized during creation
+      
+      if (this.logger) {
+        this.logger.debug('Core adapters initialization complete').catch(() => {});
+      }
+    } catch (error) {
+      if (this.logger) {
+        this.logger.error('Failed to initialize core adapters', error).catch(() => {});
+      }
+    }
+  }
+  
+  /**
+   * Terminate core adapters
+   */
+  private async terminateAdapters(): Promise<void> {
+    try {
+      // Terminate adapters
+      if (this.primeAdapter) {
+        await this.primeAdapter.terminate();
+      }
+      
+      if (this.integrityAdapter) {
+        await this.integrityAdapter.terminate();
+      }
+      
+      // Note: EncodingStreamAdapter doesn't have terminate method
+      // It doesn't require explicit termination
+      if (this.encodingAdapter) {
+        // Clear reference
+        this.encodingAdapter = undefined;
+      }
+      
+      if (this.logger) {
+        this.logger.debug('Core adapters terminated').catch(() => {});
+      }
+    } catch (error) {
+      if (this.logger) {
+        this.logger.error('Failed to terminate core adapters', error).catch(() => {});
+      }
+    }
+  }
+  
 
   
   /**
@@ -425,17 +513,7 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    */
   private createBackpressureController(): BackpressureController {
     if (this.config.backpressure?.enabled === false) {
-      // Return a no-op implementation when explicitly disabled
-      return {
-        pause: () => {},
-        resume: () => {},
-        drain: () => Promise.resolve(),
-        getBufferLevel: () => 0,
-        getMemoryUsage: () => ({ used: 0, available: 0, total: 0, bufferSize: 0, gcCollections: 0 }),
-        onPressure: () => {},
-        setThreshold: () => {},
-        getThreshold: () => 0.8
-      };
+      throw new Error('Backpressure controller is required - cannot be disabled');
     }
     
     // Try enhanced controller first, fall back to basic if needed
@@ -469,20 +547,11 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
         }
         return basicController;
       } catch (basicError) {
-        // Final fallback - create simple no-op controller
+        // Backpressure controller is required - throw error
         if (this.logger) {
-          this.logger.error('All backpressure controller creation failed, using no-op', basicError).catch(() => {});
+          this.logger.error('All backpressure controller creation failed', basicError).catch(() => {});
         }
-        return {
-          pause: () => {},
-          resume: () => {},
-          drain: () => Promise.resolve(),
-          getBufferLevel: () => 0,
-          getMemoryUsage: () => ({ used: 0, available: 0, total: 0, bufferSize: 0, gcCollections: 0 }),
-          onPressure: () => {},
-          setThreshold: () => {},
-          getThreshold: () => 0.8
-        };
+        throw new Error(`Failed to create backpressure controller: ${basicError instanceof Error ? basicError.message : 'Unknown error'}`);
       }
     }
   }
@@ -491,64 +560,22 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
    * Create memory manager based on configuration
    */
   private createMemoryManager(): MemoryManager {
-    try {
-      const memoryConfig = {
-        // Default config when memory management is disabled
-        ...(this.config.memory?.enabled === false ? {
-          strategy: 'conservative' as any,
-          enableAutoGC: false,
-          enableLeakDetection: false
-        } : {}),
-        // Apply user config
-        ...this.config.memory,
-        // Set memory limit
-        maxMemoryUsage: this.config.maxMemoryUsage || this.config.memory?.maxMemoryUsage
-      };
-      
-      const manager = createMemoryManager(memoryConfig, { logger: this.logger });
-      if (!manager) {
-        throw new Error('Memory manager creation returned undefined');
-      }
-      return manager;
-    } catch (error) {
-      if (this.logger) {
-        this.logger.error('Memory manager creation failed, using no-op implementation', error).catch(() => {});
-      }
-      
-      // Return a no-op implementation that satisfies the MemoryManager interface
-      return {
-        registerBuffer: () => '',
-        updateBufferSize: () => true,
-        releaseBuffer: () => {},
-        getOptimalBufferSize: () => 1024,
-        triggerGC: () => {},
-        onGC: () => {},
-        onMemoryPressure: () => {},
-        getMemoryStats: () => ({ used: 0, available: 1024*1024*1024, total: 1024*1024*1024 }),
-        getBufferStats: () => ({
-          totalAllocated: 0,
-          totalReleased: 0,
-          activeBuffers: 0,
-          peakUsage: 0,
-          averageBufferSize: 0,
-          totalBufferMemory: 0
-        }),
-        getManagementStats: () => ({
-          strategy: 'conservative' as any,
-          gcTriggers: 0,
-          pressureEvents: 0,
-          totalPressureTime: 0,
-          averagePressureTime: 0,
-          leaksDetected: 0,
-          bufferAdjustments: 0,
-          peakMemoryUsage: 0,
-          averageMemoryUsage: 0
-        }),
-        setStrategy: () => {},
-        getEventHistory: () => [],
-        stop: () => {}
-      } as unknown as MemoryManager;
+    if (this.config.memory?.enabled === false) {
+      throw new Error('Memory manager is required - cannot be disabled in production');
     }
+    
+    const memoryConfig = {
+      // Apply user config
+      ...this.config.memory,
+      // Set memory limit
+      maxMemoryUsage: this.config.maxMemoryUsage || this.config.memory?.maxMemoryUsage
+    };
+    
+    const manager = createMemoryManager(memoryConfig, { logger: this.logger });
+    if (!manager) {
+      throw new Error('Memory manager creation returned undefined');
+    }
+    return manager;
   }
   
   /**
@@ -575,45 +602,10 @@ class StreamManagementSuiteImpl implements StreamManagementSuite {
       return optimizer;
     } catch (error) {
       if (this.logger) {
-        this.logger.error('Performance optimizer creation failed, using strategy optimizer fallback', error).catch(() => {});
+        this.logger.error('Performance optimizer creation failed', error).catch(() => {});
       }
       
-      try {
-        // Try strategy-specific optimizer as fallback
-        const strategyOptimizer = createStrategyOptimizer(OptimizationStrategy.BALANCED, { logger: this.logger });
-        if (!strategyOptimizer) {
-          throw new Error('Strategy optimizer creation returned undefined');
-        }
-        return strategyOptimizer;
-      } catch (strategyError) {
-        if (this.logger) {
-          this.logger.error('Strategy optimizer creation also failed, creating minimal optimizer', strategyError).catch(() => {});
-        }
-        
-        // Create a minimal but functional optimizer using the implementation class directly
-        try {
-          const minimalOptimizer = new PerformanceOptimizerImpl({
-            strategy: OptimizationStrategy.BALANCED,
-            enableProfiling: false,
-            enableAutoTuning: false,
-            profilingInterval: 60000,
-            optimizationInterval: 300000,
-            benchmarkSampleSize: 10,
-            historyRetentionPeriod: 300000,
-            minimumImprovementThreshold: 10.0,
-            enableDetailedLogging: false
-          }, { logger: this.logger });
-          
-          return minimalOptimizer;
-        } catch (implError) {
-          if (this.logger) {
-            this.logger.error('All performance optimizer creation attempts failed, this indicates a critical system issue', implError).catch(() => {});
-          }
-          // Re-throw the error rather than providing a non-functional fallback
-          // This follows the core module pattern of letting failures propagate
-          throw new Error(`Failed to create performance optimizer: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
+      throw new Error(`Failed to create performance optimizer: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
   
@@ -698,13 +690,13 @@ export function createWorkloadOptimizedSuite(
       },
       memory: { 
         enabled: true,
-        strategy: 'aggressive' as any,
+        strategy: MemoryStrategy.AGGRESSIVE,
         enableAutoGC: true,
         gcThreshold: 0.9
       },
       performance: { 
         enabled: true,
-        strategy: 'throughput' as any,
+        strategy: OptimizationStrategy.THROUGHPUT,
         enableAutoTuning: true,
         profilingInterval: 2000
       }
@@ -719,13 +711,13 @@ export function createWorkloadOptimizedSuite(
       },
       memory: { 
         enabled: true,
-        strategy: 'balanced' as any,
+        strategy: MemoryStrategy.BALANCED,
         enableAutoGC: true,
         adaptiveResizing: true
       },
       performance: { 
         enabled: true,
-        strategy: 'balanced' as any,
+        strategy: OptimizationStrategy.BALANCED,
         enableAutoTuning: true,
         profilingInterval: 3000
       }
@@ -740,13 +732,13 @@ export function createWorkloadOptimizedSuite(
       },
       memory: { 
         enabled: true,
-        strategy: 'conservative' as any,
+        strategy: MemoryStrategy.CONSERVATIVE,
         enableAutoGC: true,
         gcThreshold: 0.7
       },
       performance: { 
         enabled: true,
-        strategy: 'latency' as any,
+        strategy: OptimizationStrategy.LATENCY,
         enableAutoTuning: true,
         profilingInterval: 1000
       }
@@ -761,13 +753,13 @@ export function createWorkloadOptimizedSuite(
       },
       memory: { 
         enabled: true,
-        strategy: 'conservative' as any,
+        strategy: MemoryStrategy.CONSERVATIVE,
         enableAutoGC: true,
         gcThreshold: 0.6
       },
       performance: { 
         enabled: true,
-        strategy: 'memory' as any,
+        strategy: OptimizationStrategy.MEMORY,
         enableAutoTuning: false,
         profilingInterval: 10000
       }
@@ -805,7 +797,7 @@ export function createLightweightManagementSuite(options: {
     },
     memory: {
       enabled: options.enableMemoryManagement ?? true,
-      strategy: 'balanced' as any,
+      strategy: MemoryStrategy.BALANCED,
       enableAutoGC: false,
       enableLeakDetection: false
     },

@@ -24,7 +24,6 @@ interface EncodingStats {
   textChunksDecoded: number;
   chunksDecoded: number;
   programsExecuted: number;
-  fallbacksUsed: number;
   errors: number;
   totalProcessingTime: number;
 }
@@ -40,7 +39,6 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
     textChunksDecoded: 0,
     chunksDecoded: 0,
     programsExecuted: 0,
-    fallbacksUsed: 0,
     errors: 0,
     totalProcessingTime: 0
   };
@@ -64,46 +62,25 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
         const chunkStartTime = performance.now();
         
         try {
-          if (this.encodingModule) {
-            // Use the actual encoding module
-            const chunks = await this.encodingModule.encodeText(str);
-            if (chunks !== undefined && chunks !== null) {
-              if (Array.isArray(chunks)) {
-                for (const chunk of chunks) {
-                  if (chunk !== undefined && chunk !== null) {
-                    yield chunk;
-                    this.stats.textChunksEncoded++;
-                  }
-                }
-              } else {
-                yield chunks;
-                this.stats.textChunksEncoded++;
-              }
-            } else {
-              // Fall back if encoding returns undefined
-              if (str.length > 0) {
-                const bytes = Buffer.from(str, 'utf8');
-                const hex = bytes.toString('hex');
-                yield BigInt('0x' + hex);
-                this.stats.fallbacksUsed++;
-                this.stats.textChunksEncoded++;
-              } else {
-                yield 0n;
+          if (!this.encodingModule) {
+            throw new EncodingError('Encoding module is required for text encoding');
+          }
+          
+          const chunks = await this.encodingModule.encodeText(str);
+          if (chunks === undefined || chunks === null) {
+            throw new EncodingError('Encoding module returned invalid result');
+          }
+          
+          if (Array.isArray(chunks)) {
+            for (const chunk of chunks) {
+              if (chunk !== undefined && chunk !== null) {
+                yield chunk;
                 this.stats.textChunksEncoded++;
               }
             }
           } else {
-            // Fallback encoding - convert string to BigInt
-            if (str.length > 0) {
-              const bytes = Buffer.from(str, 'utf8');
-              const hex = bytes.toString('hex');
-              yield BigInt('0x' + hex);
-              this.stats.fallbacksUsed++;
-              this.stats.textChunksEncoded++;
-            } else {
-              yield 0n;
-              this.stats.textChunksEncoded++;
-            }
+            yield chunks;
+            this.stats.textChunksEncoded++;
           }
           
           const chunkTime = performance.now() - chunkStartTime;
@@ -159,34 +136,17 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
         try {
           let decoded: string;
           
-          if (this.encodingModule) {
-            // Use the actual encoding module
-            try {
-              const result = await this.encodingModule.decodeText([chunk]);
-              if (result !== undefined && result !== null) {
-                decoded = result;
-                this.stats.textChunksDecoded++;
-              } else {
-                throw new Error('Decoding returned undefined');
-              }
-            } catch (error) {
-              if (this.logger) {
-                await this.logger.warn('Failed to decode chunk with encoding module, using fallback', {
-                  chunk: chunk.toString().substring(0, 50) + '...',
-                  error: error instanceof Error ? error.message : 'Unknown error'
-                });
-              }
-              // Fallback decoding
-              decoded = this.fallbackDecode(chunk);
-              this.stats.fallbacksUsed++;
-              this.stats.textChunksDecoded++;
-            }
-          } else {
-            // Fallback decoding
-            decoded = this.fallbackDecode(chunk);
-            this.stats.fallbacksUsed++;
-            this.stats.textChunksDecoded++;
+          if (!this.encodingModule) {
+            throw new EncodingError('Encoding module is required for text decoding');
           }
+          
+          const result = await this.encodingModule.decodeText([chunk]);
+          if (result === undefined || result === null) {
+            throw new EncodingError('Encoding module returned invalid result');
+          }
+          
+          decoded = result;
+          this.stats.textChunksDecoded++;
           
           yield decoded;
           
@@ -243,34 +203,17 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
         try {
           let decoded: DecodedChunk;
           
-          if (this.encodingModule) {
-            // Use the actual encoding module
-            try {
-              const result = await this.encodingModule.decodeChunk(chunk);
-              if (result !== undefined && result !== null) {
-                decoded = result;
-                this.stats.chunksDecoded++;
-              } else {
-                throw new Error('Decoding returned undefined');
-              }
-            } catch (error) {
-              if (this.logger) {
-                await this.logger.warn('Failed to decode chunk structure, using fallback', {
-                  chunk: chunk.toString().substring(0, 50) + '...',
-                  error: error instanceof Error ? error.message : 'Unknown error'
-                });
-              }
-              // Fallback - create a basic decoded chunk
-              decoded = this.createFallbackDecodedChunk(chunk);
-              this.stats.fallbacksUsed++;
-              this.stats.chunksDecoded++;
-            }
-          } else {
-            // Fallback - create a basic decoded chunk
-            decoded = this.createFallbackDecodedChunk(chunk);
-            this.stats.fallbacksUsed++;
-            this.stats.chunksDecoded++;
+          if (!this.encodingModule) {
+            throw new EncodingError('Encoding module is required for chunk decoding');
           }
+          
+          const result = await this.encodingModule.decodeChunk(chunk);
+          if (result === undefined || result === null) {
+            throw new EncodingError('Encoding module returned invalid result');
+          }
+          
+          decoded = result;
+          this.stats.chunksDecoded++;
           
           yield decoded;
           
@@ -328,36 +271,15 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
         programChunks.push(chunk);
       }
       
-      if (this.encodingModule) {
-        // Use the actual encoding module
-        try {
-          const result = await this.encodingModule.executeProgram(programChunks);
-          for (const output of result) {
-            yield output;
-          }
-          this.stats.programsExecuted++;
-        } catch (error) {
-          if (this.logger) {
-            await this.logger.warn('Failed to execute program, using fallback', {
-              chunkCount: programChunks.length,
-              error: error instanceof Error ? error.message : 'Unknown error'
-            });
-          }
-          // Fallback execution
-          for (const chunk of programChunks) {
-            yield `Executed chunk: ${chunk.toString()}`;
-          }
-          this.stats.fallbacksUsed++;
-          this.stats.programsExecuted++;
-        }
-      } else {
-        // Fallback execution
-        for (const chunk of programChunks) {
-          yield `Executed chunk: ${chunk.toString()}`;
-        }
-        this.stats.fallbacksUsed++;
-        this.stats.programsExecuted++;
+      if (!this.encodingModule) {
+        throw new EncodingError('Encoding module is required for program execution');
       }
+      
+      const result = await this.encodingModule.executeProgram(programChunks);
+      for (const output of result) {
+        yield output;
+      }
+      this.stats.programsExecuted++;
       
       const totalTime = performance.now() - startTime;
       this.stats.totalProcessingTime += totalTime;
@@ -424,45 +346,12 @@ export class EncodingStreamAdapter implements EncodingStreamBridge {
       textChunksDecoded: 0,
       chunksDecoded: 0,
       programsExecuted: 0,
-      fallbacksUsed: 0,
       errors: 0,
       totalProcessingTime: 0
     };
   }
   
-  /**
-   * Fallback text decoding when encoding module is not available
-   */
-  private fallbackDecode(chunk: bigint): string {
-    try {
-      const hex = chunk.toString(16);
-      const paddedHex = hex.length % 2 === 0 ? hex : '0' + hex;
-      return Buffer.from(paddedHex, 'hex').toString('utf8');
-    } catch (error) {
-      // If decoding fails, return a representation of the chunk
-      return `[CHUNK:${chunk.toString().substring(0, 20)}...]`;
-    }
-  }
-  
-  /**
-   * Create a fallback decoded chunk when encoding module is not available
-   */
-  private createFallbackDecodedChunk(chunk: bigint): DecodedChunk {
-    // Extract a simple checksum (last 16 bits)
-    const checksum = chunk & 0xFFFFn;
-    
-    // Create proper ChunkData structure
-    const data: ChunkData = {
-      value: Number(chunk % BigInt(Number.MAX_SAFE_INTEGER)),
-      position: 0
-    };
-    
-    return {
-      type: ChunkType.DATA,
-      checksum,
-      data
-    };
-  }
+
 }
 
 /**

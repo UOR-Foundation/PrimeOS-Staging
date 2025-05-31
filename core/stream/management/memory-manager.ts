@@ -2,451 +2,407 @@
  * Memory Manager Implementation
  * ============================
  * 
- * Advanced memory management for stream processing operations,
- * including garbage collection hints, memory pressure detection,
- * and adaptive buffer management.
+ * Production implementation of memory management for stream processing.
+ * Provides buffer management, garbage collection control, and memory optimization.
  */
 
-import { MemoryStats } from '../types';
 import { getMemoryStats, isMemoryPressure } from '../utils/memory-utils';
 
-/**
- * Memory management strategy enumeration
- */
-export enum MemoryStrategy {
-  CONSERVATIVE = 'conservative',
-  BALANCED = 'balanced',
-  AGGRESSIVE = 'aggressive',
-  ADAPTIVE = 'adaptive'
-}
-
-/**
- * Memory event types
- */
-export interface MemoryEvent {
-  type: 'pressure_start' | 'pressure_end' | 'gc_triggered' | 'buffer_adjusted' | 'leak_detected';
-  timestamp: number;
-  memoryUsage: MemoryStats;
-  details?: Record<string, any>;
-}
-
-/**
- * Memory management configuration
- */
 export interface MemoryManagerConfig {
-  strategy: MemoryStrategy;
-  maxMemoryUsage: number;          // Maximum memory usage (bytes)
-  warningThreshold: number;        // Warning threshold (0.0-1.0)
-  criticalThreshold: number;       // Critical threshold (0.0-1.0)
-  gcThreshold: number;             // GC trigger threshold (0.0-1.0)
-  monitorInterval: number;         // Monitoring interval (ms)
-  enableAutoGC: boolean;           // Enable automatic garbage collection
-  enableLeakDetection: boolean;    // Enable memory leak detection
-  bufferGrowthLimit: number;       // Maximum buffer growth rate
-  adaptiveResizing: boolean;       // Enable adaptive buffer resizing
+  enabled?: boolean;
+  strategy?: MemoryStrategy;
+  maxMemoryUsage?: number;
+  warningThreshold?: number;
+  criticalThreshold?: number;
+  monitorInterval?: number;
+  enableAutoGC?: boolean;
+  gcThreshold?: number;
+  enableLeakDetection?: boolean;
+  adaptiveResizing?: boolean;
+  maxBufferGrowth?: number;
 }
 
-/**
- * Default memory manager configuration
- */
-const DEFAULT_CONFIG: MemoryManagerConfig = {
-  strategy: MemoryStrategy.BALANCED,
-  maxMemoryUsage: 500 * 1024 * 1024, // 500MB
-  warningThreshold: 0.7,
-  criticalThreshold: 0.9,
-  gcThreshold: 0.8,
-  monitorInterval: 1000,
-  enableAutoGC: true,
-  enableLeakDetection: true,
-  bufferGrowthLimit: 2.0, // 200% growth max
-  adaptiveResizing: true
-};
+export enum MemoryStrategy {
+  CONSERVATIVE = 'CONSERVATIVE',
+  BALANCED = 'BALANCED',
+  AGGRESSIVE = 'AGGRESSIVE',
+  ADAPTIVE = 'ADAPTIVE'
+}
 
-/**
- * Buffer management information
- */
+export interface MemoryStats {
+  used: number;
+  available: number;
+  total: number;
+  bufferSize: number;
+  gcCollections: number;
+}
+
+export interface BufferStats {
+  totalAllocated: number;
+  totalReleased: number;
+  activeBuffers: number;
+  peakUsage: number;
+  averageBufferSize: number;
+  totalBufferMemory: number;
+}
+
+export interface ManagementStats {
+  strategy: MemoryStrategy | string;
+  gcTriggers: number;
+  pressureEvents: number;
+  totalPressureTime: number;
+  averagePressureTime: number;
+  leaksDetected: number;
+  bufferAdjustments: number;
+  peakMemoryUsage: number;
+  averageMemoryUsage: number;
+}
+
+export interface MemoryEvent {
+  type: 'BUFFER_REGISTER' | 'BUFFER_UPDATE' | 'BUFFER_RELEASE' | 'GC_TRIGGER' | 'PRESSURE_START' | 'PRESSURE_END' | 'LEAK_DETECTED';
+  timestamp: number;
+  bufferId?: string;
+  size?: number;
+  memoryUsage: number;
+  details?: string;
+}
+
 interface BufferInfo {
   id: string;
-  size: number;
-  lastUsed: number;
-  growthRate: number;
-  maxSize: number;
+  currentSize: number;
+  maxSize?: number;
+  allocatedTime: number;
+  lastAccessTime: number;
+  adjustmentCount: number;
 }
 
-/**
- * Memory manager implementation
- */
 export class MemoryManager {
-  private config: MemoryManagerConfig;
+  private config: Required<MemoryManagerConfig>;
+  private strategy: MemoryStrategy;
+  private buffers = new Map<string, BufferInfo>();
   private logger?: any;
   
-  // Monitoring state
-  private monitorTimer?: NodeJS.Timeout;
+  // Statistics tracking
+  private totalAllocated = 0;
+  private totalReleased = 0;
+  private peakUsage = 0;
+  private gcTriggers = 0;
+  private pressureEvents = 0;
+  private totalPressureTime = 0;
+  private leaksDetected = 0;
+  private bufferAdjustments = 0;
+  private peakMemoryUsage = 0;
+  private averageMemoryUsage = 0;
+  
+  // Event tracking
   private eventHistory: MemoryEvent[] = [];
-  private lastGC = 0;
-  private pressureStartTime = 0;
-  
-  // Buffer tracking
-  private buffers = new Map<string, BufferInfo>();
-  private bufferStats = {
-    totalAllocated: 0,
-    totalReleased: 0,
-    activeBuffers: 0,
-    peakUsage: 0
-  };
-  
-  // Memory statistics
-  private stats = {
-    gcTriggers: 0,
-    pressureEvents: 0,
-    totalPressureTime: 0,
-    leaksDetected: 0,
-    bufferAdjustments: 0,
-    peakMemoryUsage: 0,
-    averageMemoryUsage: 0,
-    memoryReadings: [] as number[]
-  };
-  
-  // Callbacks
-  private pressureCallbacks: ((stats: MemoryStats) => void)[] = [];
+  private pressureCallbacks: (() => void)[] = [];
   private gcCallbacks: (() => void)[] = [];
   
-  constructor(config: Partial<MemoryManagerConfig> = {}, dependencies: {
-    logger?: any;
-  } = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-    this.logger = dependencies.logger;
+  // Monitoring
+  private monitoringTimer?: NodeJS.Timeout;
+  private pressureStartTime?: number;
+  private lastGCTime = 0;
+  private GC_RATE_LIMIT = 1000; // 1 second
+  
+  // Memory usage tracking for leak detection
+  private memoryUsageHistory: number[] = [];
+  private memoryUsageSum = 0;
+  private memoryUsageCount = 0;
+  
+  constructor(config: MemoryManagerConfig = {}, options: any = {}) {
+    this.config = {
+      enabled: config.enabled ?? true,
+      strategy: config.strategy ?? MemoryStrategy.BALANCED,
+      maxMemoryUsage: config.maxMemoryUsage ?? 500 * 1024 * 1024, // 500MB default
+      warningThreshold: config.warningThreshold ?? 0.7,
+      criticalThreshold: config.criticalThreshold ?? 0.9,
+      monitorInterval: config.monitorInterval ?? 1000,
+      enableAutoGC: config.enableAutoGC ?? true,
+      gcThreshold: config.gcThreshold ?? 0.8,
+      enableLeakDetection: config.enableLeakDetection ?? true,
+      adaptiveResizing: config.adaptiveResizing ?? false,
+      maxBufferGrowth: config.maxBufferGrowth ?? 2.0
+    };
     
-    this.startMonitoring();
+    this.strategy = this.config.strategy;
+    this.logger = options.logger;
+    
+    // Start monitoring if enabled
+    if (this.config.enabled && this.config.monitorInterval > 0) {
+      this.startMonitoring();
+    }
   }
   
-  /**
-   * Register a new buffer for tracking
-   */
-  registerBuffer(id: string, initialSize: number, maxSize?: number): void {
-    this.buffers.set(id, {
+  registerBuffer(id: string, size: number, maxSize?: number): void {
+    if (!id || size < 0) return;
+    
+    const bufferInfo: BufferInfo = {
       id,
-      size: initialSize,
-      lastUsed: Date.now(),
-      growthRate: 1.0,
-      maxSize: maxSize || this.config.maxMemoryUsage / 4
+      currentSize: size,
+      maxSize,
+      allocatedTime: Date.now(),
+      lastAccessTime: Date.now(),
+      adjustmentCount: 0
+    };
+    
+    this.buffers.set(id, bufferInfo);
+    this.totalAllocated += size;
+    this.updatePeakUsage();
+    
+    this.addEvent({
+      type: 'BUFFER_REGISTER',
+      timestamp: Date.now(),
+      bufferId: id,
+      size,
+      memoryUsage: this.getCurrentMemoryUsage(),
+      details: `Registered buffer: ${id}, size: ${size}`
     });
     
-    this.bufferStats.totalAllocated += initialSize;
-    this.bufferStats.activeBuffers++;
-    
     if (this.logger) {
-      this.logger.debug('Buffer registered', {
-        id,
-        initialSize,
-        maxSize,
-        activeBuffers: this.bufferStats.activeBuffers
-      }).catch(() => {});
+      this.logger.debug('Buffer registered', { id, size, maxSize }).catch(() => {});
     }
   }
   
-  /**
-   * Update buffer size
-   */
   updateBufferSize(id: string, newSize: number): boolean {
     const buffer = this.buffers.get(id);
-    if (!buffer) {
-      if (this.logger) {
-        this.logger.warn('Attempted to update unknown buffer', { id }).catch(() => {});
-      }
-      return false;
-    }
+    if (!buffer || newSize < 0) return false;
     
-    const oldSize = buffer.size;
-    const growthFactor = newSize / oldSize;
+    const oldSize = buffer.currentSize;
+    const growthRatio = newSize / oldSize;
     
     // Check growth limits
-    if (growthFactor > this.config.bufferGrowthLimit) {
+    if (growthRatio > this.config.maxBufferGrowth) {
       if (this.logger) {
-        this.logger.warn('Buffer growth exceeds limit', {
-          id,
-          growthFactor,
-          limit: this.config.bufferGrowthLimit
+        this.logger.warn('Buffer growth limit exceeded', { 
+          id, 
+          oldSize, 
+          newSize, 
+          growthRatio, 
+          limit: this.config.maxBufferGrowth 
         }).catch(() => {});
       }
       return false;
     }
     
-    // Check memory constraints
-    const memoryStats = getMemoryStats();
-    // Handle case where memory stats are unavailable (e.g., in test environment)
-    if (!memoryStats) {
+    // Check memory limits
+    const memoryIncrease = newSize - oldSize;
+    const currentMemory = this.getCurrentMemoryUsage();
+    if (currentMemory + memoryIncrease > this.config.maxMemoryUsage) {
       if (this.logger) {
-        this.logger.debug('Memory stats unavailable, allowing buffer resize', { id, newSize }).catch(() => {});
-      }
-      // Update buffer without memory constraint check
-      buffer.size = newSize;
-      buffer.lastUsed = Date.now();
-      buffer.growthRate = growthFactor;
-      this.bufferStats.totalAllocated += (newSize - oldSize);
-      this.stats.bufferAdjustments++;
-      return true;
-    }
-    
-    const projectedUsage = memoryStats.used + (newSize - oldSize);
-    
-    if (projectedUsage > this.config.maxMemoryUsage) {
-      if (this.logger) {
-        this.logger.warn('Buffer resize would exceed memory limit', {
-          id,
-          currentUsage: memoryStats.used,
-          projectedUsage,
-          limit: this.config.maxMemoryUsage
+        this.logger.warn('Memory limit would be exceeded', { 
+          id, 
+          currentMemory, 
+          memoryIncrease, 
+          limit: this.config.maxMemoryUsage 
         }).catch(() => {});
       }
       return false;
     }
     
     // Update buffer
-    buffer.size = newSize;
-    buffer.lastUsed = Date.now();
-    buffer.growthRate = growthFactor;
+    buffer.currentSize = newSize;
+    buffer.lastAccessTime = Date.now();
+    buffer.adjustmentCount++;
     
-    this.bufferStats.totalAllocated += (newSize - oldSize);
-    this.stats.bufferAdjustments++;
+    this.totalAllocated += memoryIncrease;
+    this.bufferAdjustments++;
+    this.updatePeakUsage();
     
-    this.emitEvent('buffer_adjusted', {
+    this.addEvent({
+      type: 'BUFFER_UPDATE',
+      timestamp: Date.now(),
       bufferId: id,
-      oldSize,
-      newSize,
-      growthFactor
+      size: newSize,
+      memoryUsage: this.getCurrentMemoryUsage(),
+      details: `Updated buffer: ${id}, ${oldSize} -> ${newSize}`
     });
     
+    if (this.logger) {
+      this.logger.debug('Buffer updated', { id, oldSize, newSize }).catch(() => {});
+    }
+    
     return true;
   }
   
-  /**
-   * Release a buffer
-   */
   releaseBuffer(id: string): boolean {
     const buffer = this.buffers.get(id);
-    if (!buffer) {
-      return false;
-    }
+    if (!buffer) return false;
     
-    this.bufferStats.totalReleased += buffer.size;
-    this.bufferStats.activeBuffers--;
     this.buffers.delete(id);
+    this.totalReleased += buffer.currentSize;
+    
+    this.addEvent({
+      type: 'BUFFER_RELEASE',
+      timestamp: Date.now(),
+      bufferId: id,
+      size: buffer.currentSize,
+      memoryUsage: this.getCurrentMemoryUsage(),
+      details: `Released buffer: ${id}, size: ${buffer.currentSize}`
+    });
     
     if (this.logger) {
-      this.logger.debug('Buffer released', {
-        id,
-        size: buffer.size,
-        activeBuffers: this.bufferStats.activeBuffers
-      }).catch(() => {});
+      this.logger.debug('Buffer released', { id, size: buffer.currentSize }).catch(() => {});
     }
     
     return true;
   }
   
-  /**
-   * Get optimal buffer size based on current conditions
-   */
-  getOptimalBufferSize(currentSize: number, usage: number): number {
-    const memoryStats = getMemoryStats();
-    // Handle case where memory stats are unavailable (e.g., in test environment)
-    if (!memoryStats) {
-      return currentSize; // Return current size when memory stats unavailable
-    }
+  getOptimalBufferSize(currentSize: number, usage?: number): number {
+    const memoryStats = this.getMemoryStats();
+    const memoryRatio = memoryStats ? memoryStats.used / memoryStats.total : 0.5;
+    const usageRatio = usage || 0.8;
     
-    const memoryPressure = memoryStats.used / memoryStats.total;
+    let multiplier = 1.0;
     
-    let targetSize = currentSize;
-    
-    switch (this.config.strategy) {
+    switch (this.strategy) {
       case MemoryStrategy.CONSERVATIVE:
-        // Reduce buffers under any pressure
-        if (memoryPressure > 0.6) {
-          targetSize = Math.max(currentSize * 0.8, 1024);
+        // Reduce buffer size under pressure
+        if (memoryRatio > 0.6) {
+          multiplier = 0.75;
+        } else if (usageRatio > 0.9) {
+          multiplier = 1.1;
         }
         break;
         
       case MemoryStrategy.AGGRESSIVE:
-        // Grow buffers aggressively when memory allows
-        if (memoryPressure < 0.5 && usage > 0.8) {
-          targetSize = Math.min(currentSize * 1.5, this.config.maxMemoryUsage / 10);
-        } else if (memoryPressure > 0.8) {
-          targetSize = Math.max(currentSize * 0.5, 512);
+        // Increase buffer size when memory allows
+        if (memoryRatio < 0.5 && usageRatio > 0.8) {
+          multiplier = 1.5;
+        } else if (memoryRatio > 0.8) {
+          multiplier = 0.8;
         }
         break;
         
       case MemoryStrategy.BALANCED:
-        // Balanced approach
-        if (memoryPressure < 0.6 && usage > 0.9) {
-          targetSize = Math.min(currentSize * 1.2, this.config.maxMemoryUsage / 8);
-        } else if (memoryPressure > 0.8) {
-          targetSize = Math.max(currentSize * 0.7, 1024);
+        // Moderate adjustments
+        if (memoryRatio > 0.7) {
+          multiplier = 0.9;
+        } else if (memoryRatio <= 0.5 && usageRatio > 0.9) {
+          multiplier = 1.2;
         }
         break;
         
       case MemoryStrategy.ADAPTIVE:
-        // Adaptive based on recent performance
-        const averageUsage = this.stats.memoryReadings.length > 0 
-          ? this.stats.memoryReadings.reduce((a, b) => a + b, 0) / this.stats.memoryReadings.length
-          : memoryPressure;
-        
-        if (averageUsage < 0.5 && usage > 0.85) {
-          targetSize = Math.min(currentSize * 1.3, this.config.maxMemoryUsage / 6);
-        } else if (averageUsage > 0.8) {
-          targetSize = Math.max(currentSize * 0.6, 512);
-        }
+        // Dynamic adjustment based on current conditions
+        const pressureWeight = Math.min(memoryRatio * 2, 1);
+        const usageWeight = Math.min(usageRatio, 1);
+        multiplier = 1.0 + (usageWeight - pressureWeight) * 0.3;
         break;
     }
     
-    return Math.round(targetSize);
+    const newSize = Math.floor(currentSize * multiplier);
+    return Math.max(256, Math.min(newSize, 64 * 1024)); // Bounds: 256B to 64KB
   }
   
-  /**
-   * Trigger garbage collection
-   */
   triggerGC(): void {
-    if (!this.config.enableAutoGC) {
-      return;
-    }
-    
     const now = Date.now();
     
     // Rate limit GC triggers
-    if (now - this.lastGC < 5000) {
+    if (now - this.lastGCTime < this.GC_RATE_LIMIT) {
       return;
     }
     
-    this.lastGC = now;
-    this.stats.gcTriggers++;
+    this.lastGCTime = now;
+    this.gcTriggers++;
     
-    // Trigger garbage collection
-    if (global.gc) {
-      global.gc();
-    }
-    
-    this.emitEvent('gc_triggered', {
-      trigger: 'manual',
-      lastGC: this.lastGC
-    });
-    
-    // Notify callbacks
-    this.gcCallbacks.forEach(callback => {
+    // Try to trigger garbage collection
+    if (typeof global !== 'undefined' && global.gc) {
       try {
-        callback();
+        global.gc();
       } catch (error) {
         if (this.logger) {
-          this.logger.warn('GC callback error', error).catch(() => {});
+          this.logger.warn('Failed to trigger GC', error).catch(() => {});
         }
       }
+    }
+    
+    this.addEvent({
+      type: 'GC_TRIGGER',
+      timestamp: now,
+      memoryUsage: this.getCurrentMemoryUsage(),
+      details: 'Manual GC trigger'
     });
+    
+    // Notify GC callbacks
+    this.notifyGCCallbacks();
     
     if (this.logger) {
       this.logger.debug('Garbage collection triggered').catch(() => {});
     }
   }
   
-  /**
-   * Get current memory statistics
-   */
   getMemoryStats(): MemoryStats | undefined {
-    return getMemoryStats();
+    try {
+      return getMemoryStats();
+    } catch (error) {
+      if (this.logger) {
+        this.logger.warn('Failed to get memory stats', error).catch(() => {});
+      }
+      return undefined;
+    }
   }
   
-  /**
-   * Get buffer statistics
-   */
-  getBufferStats(): {
-    totalAllocated: number;
-    totalReleased: number;
-    activeBuffers: number;
-    peakUsage: number;
-    averageBufferSize: number;
-    totalBufferMemory: number;
-  } {
-    const totalBufferMemory = Array.from(this.buffers.values())
-      .reduce((sum, buffer) => sum + buffer.size, 0);
+  getBufferStats(): BufferStats {
+    let totalBufferMemory = 0;
+    let maxSize = 0;
+    
+    for (const buffer of this.buffers.values()) {
+      totalBufferMemory += buffer.currentSize;
+      maxSize = Math.max(maxSize, buffer.currentSize);
+    }
     
     return {
-      ...this.bufferStats,
-      averageBufferSize: this.bufferStats.activeBuffers > 0 
-        ? totalBufferMemory / this.bufferStats.activeBuffers 
-        : 0,
+      totalAllocated: this.totalAllocated,
+      totalReleased: this.totalReleased,
+      activeBuffers: this.buffers.size,
+      peakUsage: this.peakUsage,
+      averageBufferSize: this.buffers.size > 0 ? totalBufferMemory / this.buffers.size : 0,
       totalBufferMemory
     };
   }
   
-  /**
-   * Get management statistics
-   */
-  getManagementStats(): {
-    gcTriggers: number;
-    pressureEvents: number;
-    totalPressureTime: number;
-    averagePressureTime: number;
-    leaksDetected: number;
-    bufferAdjustments: number;
-    peakMemoryUsage: number;
-    averageMemoryUsage: number;
-    strategy: MemoryStrategy;
-  } {
+  getManagementStats(): ManagementStats {
     return {
-      ...this.stats,
-      averagePressureTime: this.stats.pressureEvents > 0 
-        ? this.stats.totalPressureTime / this.stats.pressureEvents 
-        : 0,
-      strategy: this.config.strategy
+      strategy: this.strategy,
+      gcTriggers: this.gcTriggers,
+      pressureEvents: this.pressureEvents,
+      totalPressureTime: this.totalPressureTime,
+      averagePressureTime: this.pressureEvents > 0 ? this.totalPressureTime / this.pressureEvents : 0,
+      leaksDetected: this.leaksDetected,
+      bufferAdjustments: this.bufferAdjustments,
+      peakMemoryUsage: this.peakMemoryUsage,
+      averageMemoryUsage: this.averageMemoryUsage
     };
   }
   
-  /**
-   * Register callback for memory pressure events
-   */
-  onMemoryPressure(callback: (stats: MemoryStats) => void): void {
+  onMemoryPressure(callback: () => void): void {
     this.pressureCallbacks.push(callback);
   }
   
-  /**
-   * Register callback for GC events
-   */
   onGC(callback: () => void): void {
     this.gcCallbacks.push(callback);
   }
   
-  /**
-   * Get recent memory events
-   */
-  getEventHistory(limit: number = 20): MemoryEvent[] {
-    return this.eventHistory.slice(-limit);
+  getEventHistory(limit?: number): MemoryEvent[] {
+    const events = [...this.eventHistory];
+    return limit ? events.slice(-limit) : events;
   }
   
-  /**
-   * Update memory strategy
-   */
   setStrategy(strategy: MemoryStrategy): void {
-    const oldStrategy = this.config.strategy;
-    this.config.strategy = strategy;
+    const oldStrategy = this.strategy;
+    this.strategy = strategy;
     
     if (this.logger) {
-      this.logger.info('Memory strategy changed', {
-        from: oldStrategy,
-        to: strategy
-      }).catch(() => {});
+      this.logger.info('Memory strategy changed', { from: oldStrategy, to: strategy }).catch(() => {});
     }
   }
   
-  /**
-   * Stop monitoring and cleanup
-   */
   stop(): void {
-    if (this.monitorTimer) {
-      clearInterval(this.monitorTimer);
-      this.monitorTimer = undefined;
+    if (this.monitoringTimer) {
+      clearInterval(this.monitoringTimer);
+      this.monitoringTimer = undefined;
     }
-    
-    this.pressureCallbacks = [];
-    this.gcCallbacks = [];
-    this.eventHistory = [];
-    this.buffers.clear();
     
     if (this.logger) {
       this.logger.debug('Memory manager stopped').catch(() => {});
@@ -454,230 +410,244 @@ export class MemoryManager {
   }
   
   /**
-   * Start memory monitoring
+   * Start monitoring memory usage and pressure
    */
   private startMonitoring(): void {
-    this.monitorTimer = setInterval(() => {
-      this.checkMemoryStatus();
+    this.monitoringTimer = setInterval(() => {
+      this.checkMemoryPressure();
+      this.updateMemoryStatistics();
+      
+      if (this.config.enableLeakDetection) {
+        this.checkForMemoryLeaks();
+      }
+      
+      if (this.config.adaptiveResizing) {
+        this.performAdaptiveResizing();
+      }
     }, this.config.monitorInterval);
-    
-    if (this.logger) {
-      this.logger.debug('Memory monitoring started', {
-        interval: this.config.monitorInterval,
-        strategy: this.config.strategy
-      }).catch(() => {});
-    }
   }
   
   /**
-   * Check current memory status and take actions
+   * Check for memory pressure and trigger callbacks
    */
-  private checkMemoryStatus(): void {
-    const memoryStats = getMemoryStats();
-    // Handle case where memory stats are unavailable (e.g., in test environment)
-    if (!memoryStats) {
-      return; // Skip monitoring when memory stats unavailable
-    }
-    
-    const memoryPressure = memoryStats.used / memoryStats.total;
-    
-    // Update statistics
-    this.stats.memoryReadings.push(memoryPressure);
-    if (this.stats.memoryReadings.length > 100) {
-      this.stats.memoryReadings.shift();
-    }
-    
-    this.stats.peakMemoryUsage = Math.max(this.stats.peakMemoryUsage, memoryStats.used);
-    this.stats.averageMemoryUsage = this.stats.memoryReadings.reduce((a, b) => a + b, 0) / this.stats.memoryReadings.length;
-    
-    // Check for memory pressure
-    this.checkMemoryPressure(memoryStats, memoryPressure);
-    
-    // Check for automatic GC
-    if (this.config.enableAutoGC && memoryPressure > this.config.gcThreshold) {
-      this.triggerGC();
-    }
-    
-    // Check for memory leaks
-    if (this.config.enableLeakDetection) {
-      this.checkMemoryLeaks(memoryStats);
-    }
-    
-    // Adaptive buffer management
-    if (this.config.adaptiveResizing) {
-      this.adjustBuffers(memoryPressure);
-    }
-  }
-  
-  /**
-   * Check for memory pressure conditions
-   */
-  private checkMemoryPressure(memoryStats: MemoryStats, memoryPressure: number): void {
-    const inPressure = memoryPressure > this.config.warningThreshold;
-    const wasInPressure = this.pressureStartTime > 0;
-    
-    if (inPressure && !wasInPressure) {
-      // Pressure started
-      this.pressureStartTime = Date.now();
-      this.stats.pressureEvents++;
+  private checkMemoryPressure(): void {
+    try {
+      const memoryStats = this.getMemoryStats();
+      if (!memoryStats) return;
       
-      this.emitEvent('pressure_start', {
-        memoryPressure,
-        threshold: this.config.warningThreshold
-      });
+      const memoryRatio = memoryStats.used / memoryStats.total;
+      const isUnderPressure = memoryRatio > this.config.warningThreshold;
       
-      // Notify callbacks
-      this.pressureCallbacks.forEach(callback => {
-        try {
-          callback(memoryStats);
-        } catch (error) {
-          if (this.logger) {
-            this.logger.warn('Memory pressure callback error', error).catch(() => {});
-          }
+      if (isUnderPressure && !this.pressureStartTime) {
+        // Pressure started
+        this.pressureStartTime = Date.now();
+        this.pressureEvents++;
+        
+        this.addEvent({
+          type: 'PRESSURE_START',
+          timestamp: Date.now(),
+          memoryUsage: memoryStats.used,
+          details: `Memory pressure started: ${(memoryRatio * 100).toFixed(1)}%`
+        });
+        
+        // Auto GC if enabled and critical threshold reached
+        if (this.config.enableAutoGC && memoryRatio > this.config.gcThreshold) {
+          this.triggerGC();
         }
-      });
-      
-    } else if (!inPressure && wasInPressure) {
-      // Pressure ended
-      const pressureDuration = Date.now() - this.pressureStartTime;
-      this.stats.totalPressureTime += pressureDuration;
-      this.pressureStartTime = 0;
-      
-      this.emitEvent('pressure_end', {
-        memoryPressure,
-        pressureDuration
-      });
+        
+        this.notifyPressureCallbacks();
+        
+      } else if (!isUnderPressure && this.pressureStartTime) {
+        // Pressure ended
+        this.totalPressureTime += Date.now() - this.pressureStartTime;
+        this.pressureStartTime = undefined;
+        
+        this.addEvent({
+          type: 'PRESSURE_END',
+          timestamp: Date.now(),
+          memoryUsage: memoryStats.used,
+          details: `Memory pressure ended: ${(memoryRatio * 100).toFixed(1)}%`
+        });
+      }
+    } catch (error) {
+      if (this.logger) {
+        this.logger.warn('Error checking memory pressure', error).catch(() => {});
+      }
+    }
+  }
+  
+  /**
+   * Update memory usage statistics
+   */
+  private updateMemoryStatistics(): void {
+    const memoryStats = this.getMemoryStats();
+    if (!memoryStats) return;
+    
+    this.memoryUsageSum += memoryStats.used;
+    this.memoryUsageCount++;
+    this.averageMemoryUsage = this.memoryUsageSum / this.memoryUsageCount;
+    this.peakMemoryUsage = Math.max(this.peakMemoryUsage, memoryStats.used);
+    
+    // Keep limited history for leak detection
+    this.memoryUsageHistory.push(memoryStats.used);
+    if (this.memoryUsageHistory.length > 10) {
+      this.memoryUsageHistory.shift();
     }
   }
   
   /**
    * Check for potential memory leaks
    */
-  private checkMemoryLeaks(memoryStats: MemoryStats): void {
-    // Simple leak detection: sustained high memory usage
-    if (this.stats.memoryReadings.length >= 10) {
-      const recentReadings = this.stats.memoryReadings.slice(-10);
-      const averageRecent = recentReadings.reduce((a, b) => a + b, 0) / recentReadings.length;
+  private checkForMemoryLeaks(): void {
+    if (this.memoryUsageHistory.length < 5) return;
+    
+    // Check if memory usage is consistently high
+    const recentUsage = this.memoryUsageHistory.slice(-5);
+    const isConsistentlyHigh = recentUsage.every(usage => 
+      usage / this.config.maxMemoryUsage > this.config.criticalThreshold
+    );
+    
+    if (isConsistentlyHigh) {
+      this.leaksDetected++;
       
-      if (averageRecent > 0.9 && recentReadings.every(r => r > 0.85)) {
-        this.stats.leaksDetected++;
-        
-        this.emitEvent('leak_detected', {
-          averageUsage: averageRecent,
-          sustainedPeriod: this.config.monitorInterval * 10,
-          totalDetected: this.stats.leaksDetected
-        });
-        
+      this.addEvent({
+        type: 'LEAK_DETECTED',
+        timestamp: Date.now(),
+        memoryUsage: recentUsage[recentUsage.length - 1],
+        details: 'Potential memory leak detected: consistently high usage'
+      });
+      
+      if (this.logger) {
+        this.logger.warn('Potential memory leak detected', {
+          recentUsage,
+          threshold: this.config.criticalThreshold
+        }).catch(() => {});
+      }
+    }
+  }
+  
+  /**
+   * Perform adaptive buffer resizing based on current conditions
+   */
+  private performAdaptiveResizing(): void {
+    if (this.buffers.size === 0) return;
+    
+    const memoryStats = this.getMemoryStats();
+    if (!memoryStats) return;
+    
+    const memoryRatio = memoryStats.used / memoryStats.total;
+    
+    // Only resize if memory pressure is significant
+    if (memoryRatio < this.config.warningThreshold) return;
+    
+    let resizedCount = 0;
+    const maxResizePerCycle = Math.ceil(this.buffers.size / 4); // Max 25% per cycle
+    
+    for (const [id, buffer] of this.buffers.entries()) {
+      if (resizedCount >= maxResizePerCycle) break;
+      
+      const newSize = this.getOptimalBufferSize(buffer.currentSize, 0.8);
+      
+      if (newSize !== buffer.currentSize && newSize < buffer.currentSize) {
+        // Only shrink buffers during adaptive resizing to reduce pressure
+        if (this.updateBufferSize(id, newSize)) {
+          resizedCount++;
+        }
+      }
+    }
+    
+    if (resizedCount > 0 && this.logger) {
+      this.logger.debug('Adaptive buffer resizing completed', {
+        resizedCount,
+        memoryRatio: (memoryRatio * 100).toFixed(1) + '%'
+      }).catch(() => {});
+    }
+  }
+  
+  /**
+   * Get current memory usage from buffers
+   */
+  private getCurrentMemoryUsage(): number {
+    let totalMemory = 0;
+    for (const buffer of this.buffers.values()) {
+      totalMemory += buffer.currentSize;
+    }
+    return totalMemory;
+  }
+  
+  /**
+   * Update peak usage tracking
+   */
+  private updatePeakUsage(): void {
+    const currentUsage = this.getCurrentMemoryUsage();
+    this.peakUsage = Math.max(this.peakUsage, currentUsage);
+  }
+  
+  /**
+   * Add event to history with size limiting
+   */
+  private addEvent(event: MemoryEvent): void {
+    this.eventHistory.push(event);
+    
+    // Limit history size
+    if (this.eventHistory.length > 200) {
+      this.eventHistory = this.eventHistory.slice(-200);
+    }
+  }
+  
+  /**
+   * Notify pressure callbacks
+   */
+  private notifyPressureCallbacks(): void {
+    for (const callback of this.pressureCallbacks) {
+      try {
+        callback();
+      } catch (error) {
         if (this.logger) {
-          this.logger.warn('Potential memory leak detected', {
-            averageUsage: averageRecent,
-            currentUsage: memoryStats.used,
-            threshold: 0.9
-          }).catch(() => {});
+          this.logger.warn('Pressure callback error', error).catch(() => {});
         }
       }
     }
   }
   
   /**
-   * Adaptively adjust buffer sizes based on memory pressure
+   * Notify GC callbacks
    */
-  private adjustBuffers(memoryPressure: number): void {
-    if (memoryPressure < this.config.warningThreshold) {
-      return; // No adjustment needed
-    }
-    
-    const reductionFactor = Math.max(0.5, 1 - (memoryPressure - this.config.warningThreshold));
-    
-    for (const [id, buffer] of this.buffers) {
-      const newSize = Math.max(1024, Math.round(buffer.size * reductionFactor));
-      
-      if (newSize < buffer.size) {
-        this.updateBufferSize(id, newSize);
+  private notifyGCCallbacks(): void {
+    for (const callback of this.gcCallbacks) {
+      try {
+        callback();
+      } catch (error) {
+        if (this.logger) {
+          this.logger.warn('GC callback error', error).catch(() => {});
+        }
       }
     }
   }
-  
-  /**
-   * Emit a memory management event
-   */
-  private emitEvent(type: MemoryEvent['type'], details?: Record<string, any>): void {
-    const memoryStats = getMemoryStats();
-    const event: MemoryEvent = {
-      type,
-      timestamp: Date.now(),
-      memoryUsage: memoryStats || {
-        used: 0,
-        total: 500 * 1024 * 1024, // 500MB default
-        available: 500 * 1024 * 1024,
-        bufferSize: 8192,
-        gcCollections: 0
-      },
-      details
-    };
-    
-    this.eventHistory.push(event);
-    
-    // Keep only recent events
-    if (this.eventHistory.length > 200) {
-      this.eventHistory = this.eventHistory.slice(-100);
-    }
-  }
 }
 
-/**
- * Create a memory manager
- */
 export function createMemoryManager(
-  config: Partial<MemoryManagerConfig> = {},
-  dependencies: { logger?: any } = {}
+  config: MemoryManagerConfig = {},
+  options: any = {}
 ): MemoryManager {
-  return new MemoryManager(config, dependencies);
+  return new MemoryManager(config, options);
 }
 
-/**
- * Create a memory manager with strategy-specific optimizations
- */
 export function createOptimizedMemoryManager(
   strategy: MemoryStrategy,
-  dependencies: { logger?: any; maxMemory?: number } = {}
+  options: {
+    maxMemory?: number;
+    logger?: any;
+  } = {}
 ): MemoryManager {
-  const strategyConfigs: Record<MemoryStrategy, Partial<MemoryManagerConfig>> = {
-    [MemoryStrategy.CONSERVATIVE]: {
-      strategy,
-      warningThreshold: 0.6,
-      criticalThreshold: 0.8,
-      gcThreshold: 0.7,
-      bufferGrowthLimit: 1.5
-    },
-    [MemoryStrategy.BALANCED]: {
-      strategy,
-      warningThreshold: 0.7,
-      criticalThreshold: 0.9,
-      gcThreshold: 0.8,
-      bufferGrowthLimit: 2.0
-    },
-    [MemoryStrategy.AGGRESSIVE]: {
-      strategy,
-      warningThreshold: 0.8,
-      criticalThreshold: 0.95,
-      gcThreshold: 0.9,
-      bufferGrowthLimit: 3.0
-    },
-    [MemoryStrategy.ADAPTIVE]: {
-      strategy,
-      warningThreshold: 0.7,
-      criticalThreshold: 0.9,
-      gcThreshold: 0.8,
-      bufferGrowthLimit: 2.5,
-      adaptiveResizing: true
-    }
+  const config: MemoryManagerConfig = {
+    strategy,
+    maxMemoryUsage: options.maxMemory || 200 * 1024 * 1024,
+    enableAutoGC: true,
+    enableLeakDetection: true,
+    adaptiveResizing: strategy === MemoryStrategy.ADAPTIVE,
+    monitorInterval: strategy === MemoryStrategy.AGGRESSIVE ? 500 : 1000
   };
   
-  const config = {
-    ...strategyConfigs[strategy],
-    maxMemoryUsage: dependencies.maxMemory || DEFAULT_CONFIG.maxMemoryUsage
-  };
-  
-  return new MemoryManager(config, dependencies);
+  return new MemoryManager(config, { logger: options.logger });
 }

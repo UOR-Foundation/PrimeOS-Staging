@@ -57,18 +57,8 @@ export function getMemoryStats(): MemoryStats {
     }
   }
   
-  // Fallback for testing environments with realistic values
-  const baseMemory = 150 * 1024 * 1024; // 150MB base
-  const usagePercentage = 0.3 + Math.random() * 0.4; // 30-70% usage
-  const used = Math.floor(baseMemory * usagePercentage);
-  
-  return {
-    used,
-    available: baseMemory - used,
-    total: baseMemory,
-    bufferSize: 0,
-    gcCollections: gcCollectionCount
-  };
+  // No fallback - memory stats are required
+  throw new Error('Unable to access memory statistics. Ensure the environment provides either process.memoryUsage() or performance.memory API.');
 }
 
 /**

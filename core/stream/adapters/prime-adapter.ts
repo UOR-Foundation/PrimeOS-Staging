@@ -8,8 +8,8 @@
 
 import { PrimeRegistryInterface, Factor } from '../../prime/types';
 import { LoggingInterface } from '../../../os/logging/types';
-import { createAsyncIterable } from '../utils';
 import { performance } from 'perf_hooks';
+import { MathUtilities } from '../../precision';
 
 /**
  * Statistics tracking for prime operations
@@ -359,10 +359,16 @@ export class PrimeStreamAdapter {
         const chunkStartTime = performance.now();
         
         try {
-          let result = 1n;
+          let result = BigInt(1);
           
           for (const factor of factors) {
-            result *= factor.prime ** BigInt(factor.exponent);
+            // Use regular exponentiation for reconstruction
+            // Calculate prime^exponent
+            let primeToExponent = BigInt(1);
+            for (let i = 0; i < factor.exponent; i++) {
+              primeToExponent = primeToExponent * factor.prime;
+            }
+            result = result * primeToExponent;
           }
           
           yield result;
@@ -380,13 +386,12 @@ export class PrimeStreamAdapter {
         } catch (error) {
           this.stats.errors++;
           if (this.logger) {
-            await this.logger.warn('Failed to reconstruct from factors', {
+            await this.logger.error('Failed to reconstruct from factors', {
               factorCount: factors.length,
               error: error instanceof Error ? error.message : 'Unknown error'
             });
           }
-          // Yield 1 as fallback
-          yield 1n;
+          throw new Error(`Failed to reconstruct number from factors: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
       
