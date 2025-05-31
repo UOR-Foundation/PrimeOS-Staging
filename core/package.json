@@ -1,0 +1,100 @@
+{
+  "name": "@primeos/core",
+  "version": "1.0.0",
+  "description": "PrimeOS Core - Foundational layer implementing UOR kernel axioms",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@primeos/os-model": "workspace:*",
+    "@primeos/os-logging": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@primeos/prime": "workspace:*",
+    "@primeos/integrity": "workspace:*",
+    "@primeos/encoding": "workspace:*",
+    "@primeos/stream": "workspace:*",
+    "@primeos/bands": "workspace:*",
+    "@primeos/precision": "workspace:*"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "package.json"
+  ],
+  "keywords": [
+    "primeos",
+    "core",
+    "uor",
+    "kernel",
+    "prime-numbers",
+    "mathematical-os"
+  ],
+  "author": "PrimeOS Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/primeos/core.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./prime": {
+      "import": "./dist/prime/index.js",
+      "require": "./dist/prime/index.js",
+      "types": "./dist/prime/index.d.ts"
+    },
+    "./integrity": {
+      "import": "./dist/integrity/index.js",
+      "require": "./dist/integrity/index.js",
+      "types": "./dist/integrity/index.d.ts"
+    },
+    "./encoding": {
+      "import": "./dist/encoding/index.js",
+      "require": "./dist/encoding/index.js",
+      "types": "./dist/encoding/index.d.ts"
+    },
+    "./stream": {
+      "import": "./dist/stream/index.js",
+      "require": "./dist/stream/index.js",
+      "types": "./dist/stream/index.d.ts"
+    },
+    "./bands": {
+      "import": "./dist/bands/index.js",
+      "require": "./dist/bands/index.js",
+      "types": "./dist/bands/index.d.ts"
+    },
+    "./precision": {
+      "import": "./dist/precision/index.js",
+      "require": "./dist/precision/index.js",
+      "types": "./dist/precision/index.d.ts"
+    }
+  }
+}

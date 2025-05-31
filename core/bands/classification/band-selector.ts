@@ -23,6 +23,12 @@ import {
   getNeighboringBands
 } from '../utils/helpers';
 
+import {
+  getBitSizeForBand,
+  getDefaultPrimeForBand,
+  getExpectedAcceleration
+} from '../utils/constants';
+
 /**
  * Adaptive band selector with performance monitoring
  */
@@ -128,11 +134,15 @@ export class BandSelectorImpl implements BandSelector {
     this.updateAdaptiveThresholds(metrics);
     
     // Generate new configuration
+    const selectedBand = this.selectOptimalBandFromMetrics(metrics);
+    const bandRange = getBitSizeForBand(selectedBand);
+    const optimalPrime = getDefaultPrimeForBand(selectedBand);
+    
     const configuration: BandConfiguration = {
-      band: this.selectOptimalBandFromMetrics(metrics),
+      band: selectedBand,
       config: {
-        bitRange: { min: 16, max: 4096 }, // Will be updated based on analysis
-        primeModulus: BigInt(1009), // Default prime
+        bitRange: bandRange,
+        primeModulus: optimalPrime,
         processingStrategy: this.selectOptimalStrategyFromMetrics(metrics),
         windowFunction: this.selectOptimalWindowFunction(metrics),
         latticeConfig: {
@@ -345,35 +355,87 @@ export class BandSelectorImpl implements BandSelector {
   }
   
   private getTradeoffs(bandA: BandType, bandB: BandType): string[] {
-    // Simplified tradeoff analysis
     const tradeoffs: string[] = [];
     
     const indexA = Object.values(BandType).indexOf(bandA);
     const indexB = Object.values(BandType).indexOf(bandB);
     
     if (indexB > indexA) {
-      tradeoffs.push('Higher memory usage', 'Better scalability', 'Higher latency');
+      // Moving to higher band
+      const diff = indexB - indexA;
+      
+      if (diff === 1) {
+        tradeoffs.push(
+          'Moderate increase in memory usage',
+          'Better handling of larger numbers',
+          'Slightly higher latency',
+          'Improved parallel processing capability'
+        );
+      } else if (diff === 2) {
+        tradeoffs.push(
+          'Significant increase in memory usage',
+          'Much better scalability',
+          'Higher latency and startup cost',
+          'Enhanced throughput for large batches'
+        );
+      } else {
+        tradeoffs.push(
+          'Substantial increase in resource requirements',
+          'Dramatic improvement in handling very large numbers',
+          'Much higher latency and complexity',
+          'Maximum parallel processing and distribution capability'
+        );
+      }
+    } else if (indexA > indexB) {
+      // Moving to lower band
+      const diff = indexA - indexB;
+      
+      if (diff === 1) {
+        tradeoffs.push(
+          'Moderate reduction in memory usage',
+          'Faster response for smaller numbers',
+          'Reduced parallel processing capability',
+          'Better cache locality'
+        );
+      } else if (diff === 2) {
+        tradeoffs.push(
+          'Significant memory savings',
+          'Much faster response times',
+          'Limited scalability for large numbers',
+          'Optimized for sequential processing'
+        );
+      } else {
+        tradeoffs.push(
+          'Minimal resource requirements',
+          'Optimal performance for small numbers',
+          'Very limited capability for large numbers',
+          'Best suited for simple, direct computation'
+        );
+      }
     } else {
-      tradeoffs.push('Lower memory usage', 'Faster response', 'Limited scalability');
+      // Same band
+      tradeoffs.push('No significant tradeoffs - same processing band');
+    }
+    
+    // Add band-specific characteristics
+    const bandAChars = this.getBandCharacteristics(bandA);
+    const bandBChars = this.getBandCharacteristics(bandB);
+    
+    if (bandAChars.cacheEfficiency !== bandBChars.cacheEfficiency) {
+      const direction = bandBChars.cacheEfficiency > bandAChars.cacheEfficiency ? 'improved' : 'reduced';
+      tradeoffs.push(`${direction} cache efficiency`);
+    }
+    
+    if (bandAChars.algorithmComplexity !== bandBChars.algorithmComplexity) {
+      const direction = bandBChars.algorithmComplexity > bandAChars.algorithmComplexity ? 'increased' : 'reduced';
+      tradeoffs.push(`${direction} algorithm complexity`);
     }
     
     return tradeoffs;
   }
   
   private getBitRangeForBand(band: BandType): { min: number; max: number } {
-    // This should match the constants, but we'll define it here for safety
-    const ranges = {
-      [BandType.ULTRABASS]: { min: 16, max: 32 },
-      [BandType.BASS]: { min: 33, max: 64 },
-      [BandType.MIDRANGE]: { min: 65, max: 128 },
-      [BandType.UPPER_MID]: { min: 129, max: 256 },
-      [BandType.TREBLE]: { min: 257, max: 512 },
-      [BandType.SUPER_TREBLE]: { min: 513, max: 1024 },
-      [BandType.ULTRASONIC_1]: { min: 1025, max: 2048 },
-      [BandType.ULTRASONIC_2]: { min: 2049, max: 4096 }
-    };
-    
-    return ranges[band];
+    return getBitSizeForBand(band);
   }
   
   private analyzePerformanceMetrics(metrics: BandPerformanceMetrics): { expectedImprovement: number } {
@@ -427,13 +489,66 @@ export class BandSelectorImpl implements BandSelector {
   }
   
   private selectOptimalStrategyFromMetrics(metrics: BandPerformanceMetrics): any {
-    // Return a default strategy - this would be more sophisticated in practice
-    return 'adaptive';
+    // Analyze metrics to determine optimal processing strategy
+    const avgUtilization = Array.from(metrics.bandUtilization.values())
+      .reduce((sum, val) => sum + val, 0) / metrics.bandUtilization.size;
+    
+    // High error rate suggests need for more conservative approach
+    if (metrics.overallErrorRate > 0.05) {
+      return 'DIRECT_COMPUTATION'; // Most reliable
+    }
+    
+    // High transition overhead suggests sticking with current strategies
+    if (metrics.transitionOverhead > 0.15) {
+      return 'CACHE_OPTIMIZED'; // Minimize transitions
+    }
+    
+    // High utilization suggests need for parallel/distributed approaches
+    if (avgUtilization > 0.7) {
+      return 'PARALLEL_SIEVE'; // Scale out
+    }
+    
+    // Medium utilization with good accuracy suggests sieve-based
+    if (avgUtilization > 0.4 && metrics.averageAccuracy > 0.9) {
+      return 'SIEVE_BASED';
+    }
+    
+    // Low utilization suggests streaming approach
+    if (avgUtilization < 0.3) {
+      return 'STREAMING_PRIME';
+    }
+    
+    // Default to adaptive for balanced scenarios
+    return 'HYBRID_STRATEGY';
   }
   
   private selectOptimalWindowFunction(metrics: BandPerformanceMetrics): any {
-    // Return a default window function
-    return 'hamming';
+    // Select window function based on spectral characteristics and performance
+    const avgAccuracy = metrics.averageAccuracy;
+    const errorRate = metrics.overallErrorRate;
+    
+    // High accuracy with low error rate - use high-precision window
+    if (avgAccuracy > 0.95 && errorRate < 0.02) {
+      return 'BLACKMAN_HARRIS'; // Best spectral characteristics
+    }
+    
+    // Good accuracy, moderate error rate - balanced window
+    if (avgAccuracy > 0.9 && errorRate < 0.05) {
+      return 'HAMMING'; // Good balance of spectral leakage and resolution
+    }
+    
+    // Lower accuracy or higher error rate - simpler window
+    if (avgAccuracy > 0.8) {
+      return 'HANNING'; // Good for general purposes
+    }
+    
+    // Poor performance - use most basic window
+    if (avgAccuracy < 0.8 || errorRate > 0.1) {
+      return 'RECTANGULAR'; // Minimal processing overhead
+    }
+    
+    // Default for unknown conditions
+    return 'KAISER'; // Adaptive window with good characteristics
   }
   
   private calculateOptimalCacheSize(metrics: BandPerformanceMetrics): number {
@@ -444,17 +559,66 @@ export class BandSelectorImpl implements BandSelector {
   }
   
   private getExpectedAccelerationForBand(band: BandType): number {
-    const accelerationMap = {
-      [BandType.ULTRABASS]: 2.5,
-      [BandType.BASS]: 5.0,
-      [BandType.MIDRANGE]: 7.0,
-      [BandType.UPPER_MID]: 9.0,
-      [BandType.TREBLE]: 11.0,
-      [BandType.SUPER_TREBLE]: 13.0,
-      [BandType.ULTRASONIC_1]: 10.0,
-      [BandType.ULTRASONIC_2]: 6.0
+    return getExpectedAcceleration(band);
+  }
+  
+  private getBandCharacteristics(band: BandType): {
+    cacheEfficiency: number;
+    algorithmComplexity: number;
+    memoryRequirement: number;
+    parallelizationPotential: number;
+  } {
+    const characteristics = {
+      [BandType.ULTRABASS]: {
+        cacheEfficiency: 0.95,
+        algorithmComplexity: 0.2,
+        memoryRequirement: 0.1,
+        parallelizationPotential: 0.1
+      },
+      [BandType.BASS]: {
+        cacheEfficiency: 0.9,
+        algorithmComplexity: 0.3,
+        memoryRequirement: 0.2,
+        parallelizationPotential: 0.3
+      },
+      [BandType.MIDRANGE]: {
+        cacheEfficiency: 0.8,
+        algorithmComplexity: 0.5,
+        memoryRequirement: 0.4,
+        parallelizationPotential: 0.6
+      },
+      [BandType.UPPER_MID]: {
+        cacheEfficiency: 0.7,
+        algorithmComplexity: 0.6,
+        memoryRequirement: 0.6,
+        parallelizationPotential: 0.8
+      },
+      [BandType.TREBLE]: {
+        cacheEfficiency: 0.6,
+        algorithmComplexity: 0.7,
+        memoryRequirement: 0.7,
+        parallelizationPotential: 0.9
+      },
+      [BandType.SUPER_TREBLE]: {
+        cacheEfficiency: 0.5,
+        algorithmComplexity: 0.8,
+        memoryRequirement: 0.8,
+        parallelizationPotential: 0.95
+      },
+      [BandType.ULTRASONIC_1]: {
+        cacheEfficiency: 0.4,
+        algorithmComplexity: 0.9,
+        memoryRequirement: 0.9,
+        parallelizationPotential: 0.85
+      },
+      [BandType.ULTRASONIC_2]: {
+        cacheEfficiency: 0.3,
+        algorithmComplexity: 0.95,
+        memoryRequirement: 0.95,
+        parallelizationPotential: 0.7
+      }
     };
     
-    return accelerationMap[band];
+    return characteristics[band];
   }
 }

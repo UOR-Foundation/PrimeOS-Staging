@@ -26,6 +26,7 @@ import {
 
 import {
   BAND_CONSTANTS,
+  PERFORMANCE_CONSTANTS,
   getBitSizeForBand,
   getExpectedAcceleration
 } from '../utils/constants';
@@ -36,6 +37,9 @@ import {
 export class BandClassifier {
   private classificationCache: Map<string, BandClassification> = new Map();
   private cacheSize: number;
+  private cacheHits: number = 0;
+  private cacheMisses: number = 0;
+  private successTracker: Map<BandType, { successes: number; failures: number }> = new Map();
   
   constructor(options: { cacheSize?: number } = {}) {
     this.cacheSize = options.cacheSize || 1000;
@@ -49,8 +53,11 @@ export class BandClassifier {
     
     // Check cache first
     if (this.classificationCache.has(cacheKey)) {
+      this.cacheHits++;
       return this.classificationCache.get(cacheKey)!;
     }
+    
+    this.cacheMisses++;
     
     // Perform classification
     const characteristics = analyzeNumberCharacteristics(n);
@@ -189,6 +196,59 @@ export class BandClassifier {
    */
   clearCache(): void {
     this.classificationCache.clear();
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+  }
+  
+  /**
+   * Record a classification success or failure for performance tracking
+   */
+  recordClassificationResult(band: BandType, success: boolean): void {
+    if (!this.successTracker.has(band)) {
+      this.successTracker.set(band, { successes: 0, failures: 0 });
+    }
+    
+    const tracker = this.successTracker.get(band)!;
+    if (success) {
+      tracker.successes++;
+    } else {
+      tracker.failures++;
+    }
+  }
+  
+  /**
+   * Get detailed performance statistics
+   */
+  getPerformanceStats(): {
+    totalClassifications: number;
+    cacheEfficiency: number;
+    bandSuccessRates: Map<BandType, number>;
+    overallSuccessRate: number;
+  } {
+    const totalClassifications = this.cacheHits + this.cacheMisses;
+    const cacheEfficiency = totalClassifications > 0 ? this.cacheHits / totalClassifications : 0;
+    
+    const bandSuccessRates = new Map<BandType, number>();
+    let totalSuccesses = 0;
+    let totalAttempts = 0;
+    
+    for (const [band, tracker] of this.successTracker) {
+      const attempts = tracker.successes + tracker.failures;
+      if (attempts > 0) {
+        bandSuccessRates.set(band, tracker.successes / attempts);
+        totalSuccesses += tracker.successes;
+        totalAttempts += attempts;
+      }
+    }
+    
+    const overallSuccessRate = totalAttempts > 0 ? totalSuccesses / totalAttempts : 0;
+    
+    return {
+      totalClassifications,
+      cacheEfficiency,
+      bandSuccessRates,
+      overallSuccessRate
+    };
   }
   
   /**
@@ -206,9 +266,12 @@ export class BandClassifier {
       distribution.set(classification.band, count + 1);
     }
     
+    const totalRequests = this.cacheHits + this.cacheMisses;
+    const hitRate = totalRequests > 0 ? this.cacheHits / totalRequests : 0;
+    
     return {
       size: this.classificationCache.size,
-      hitRate: 0.85, // TODO: Implement actual hit rate tracking
+      hitRate,
       distribution
     };
   }
@@ -219,7 +282,9 @@ export class BandClassifier {
     // Implement LRU eviction if cache is full
     if (this.classificationCache.size >= this.cacheSize) {
       const firstKey = this.classificationCache.keys().next().value;
-      this.classificationCache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.classificationCache.delete(firstKey);
+      }
     }
     
     this.classificationCache.set(key, classification);
@@ -303,33 +368,12 @@ export class BandClassifier {
   }
   
   private getMemoryUsageForBand(band: BandType): number {
-    const memoryMap = {
-      [BandType.ULTRABASS]: 256,
-      [BandType.BASS]: 512,
-      [BandType.MIDRANGE]: 1024,
-      [BandType.UPPER_MID]: 2048,
-      [BandType.TREBLE]: 4096,
-      [BandType.SUPER_TREBLE]: 8192,
-      [BandType.ULTRASONIC_1]: 16384,
-      [BandType.ULTRASONIC_2]: 32768
-    };
-    
-    return memoryMap[band];
+    return BAND_CONSTANTS.BIT_RANGES[band] ? 
+      Math.pow(2, 8 + Object.values(BandType).indexOf(band)) : 1024;
   }
   
   private getCacheSizeForBand(band: BandType): number {
-    const cacheMap = {
-      [BandType.ULTRABASS]: 1024,
-      [BandType.BASS]: 2048,
-      [BandType.MIDRANGE]: 4096,
-      [BandType.UPPER_MID]: 8192,
-      [BandType.TREBLE]: 16384,
-      [BandType.SUPER_TREBLE]: 32768,
-      [BandType.ULTRASONIC_1]: 65536,
-      [BandType.ULTRASONIC_2]: 131072
-    };
-    
-    return cacheMap[band];
+    return PERFORMANCE_CONSTANTS.CACHE_SIZES[band] || 4096;
   }
   
   private getOptimalUseCases(band: BandType): string[] {
@@ -363,19 +407,22 @@ export class BandClassifier {
   }
   
   private calculateSuccessRate(band: BandType): number {
-    // TODO: Implement actual success rate tracking
-    // For now, return a reasonable default based on band characteristics
-    const successRates = {
-      [BandType.ULTRABASS]: 0.98,
-      [BandType.BASS]: 0.96,
-      [BandType.MIDRANGE]: 0.94,
-      [BandType.UPPER_MID]: 0.92,
-      [BandType.TREBLE]: 0.90,
-      [BandType.SUPER_TREBLE]: 0.88,
-      [BandType.ULTRASONIC_1]: 0.85,
-      [BandType.ULTRASONIC_2]: 0.82
-    };
+    const tracker = this.successTracker.get(band);
+    if (!tracker || tracker.successes + tracker.failures === 0) {
+      // Default rates based on band characteristics when no data available
+      const defaultRates = {
+        [BandType.ULTRABASS]: 0.98,
+        [BandType.BASS]: 0.96,
+        [BandType.MIDRANGE]: 0.94,
+        [BandType.UPPER_MID]: 0.92,
+        [BandType.TREBLE]: 0.90,
+        [BandType.SUPER_TREBLE]: 0.88,
+        [BandType.ULTRASONIC_1]: 0.85,
+        [BandType.ULTRASONIC_2]: 0.82
+      };
+      return defaultRates[band];
+    }
     
-    return successRates[band];
+    return tracker.successes / (tracker.successes + tracker.failures);
   }
 }

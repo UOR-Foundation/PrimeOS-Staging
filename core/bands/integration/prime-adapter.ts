@@ -15,6 +15,17 @@ import {
   QualityMetrics
 } from '../types';
 
+import {
+  BAND_CONSTANTS,
+  PERFORMANCE_CONSTANTS,
+  getBitSizeForBand,
+  getExpectedAcceleration
+} from '../utils/constants';
+
+import {
+  calculateBitSize
+} from '../utils/helpers';
+
 /**
  * Prime adapter interface
  */
@@ -405,18 +416,7 @@ export class PrimeAdapterImpl implements PrimeAdapter {
   }
   
   private getBandBitRange(band: BandType): { min: number; max: number } {
-    const ranges = {
-      [BandType.ULTRABASS]: { min: 16, max: 32 },
-      [BandType.BASS]: { min: 33, max: 64 },
-      [BandType.MIDRANGE]: { min: 65, max: 128 },
-      [BandType.UPPER_MID]: { min: 129, max: 256 },
-      [BandType.TREBLE]: { min: 257, max: 512 },
-      [BandType.SUPER_TREBLE]: { min: 513, max: 1024 },
-      [BandType.ULTRASONIC_1]: { min: 1025, max: 2048 },
-      [BandType.ULTRASONIC_2]: { min: 2049, max: 4096 }
-    };
-    
-    return ranges[band];
+    return getBitSizeForBand(band);
   }
   
   private getStartingCandidate(band: BandType): bigint {
@@ -451,18 +451,7 @@ export class PrimeAdapterImpl implements PrimeAdapter {
   }
   
   private getAccelerationFactor(band: BandType): number {
-    const factors = {
-      [BandType.ULTRABASS]: 2.5,
-      [BandType.BASS]: 5.0,
-      [BandType.MIDRANGE]: 7.0,
-      [BandType.UPPER_MID]: 9.0,
-      [BandType.TREBLE]: 11.0,
-      [BandType.SUPER_TREBLE]: 13.0,
-      [BandType.ULTRASONIC_1]: 10.0,
-      [BandType.ULTRASONIC_2]: 6.0
-    };
-    
-    return factors[band];
+    return getExpectedAcceleration(band);
   }
   
   private getDefaultMetrics(band: BandType): BandMetrics {

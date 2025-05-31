@@ -15,6 +15,13 @@ import {
   QualityMetrics
 } from '../types';
 
+import {
+  BAND_CONSTANTS,
+  PERFORMANCE_CONSTANTS,
+  getBitSizeForBand,
+  getExpectedAcceleration
+} from '../utils/constants';
+
 /**
  * Precision adapter interface
  */
