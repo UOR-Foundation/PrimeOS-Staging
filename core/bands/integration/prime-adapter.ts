@@ -69,10 +69,11 @@ const DEFAULT_PRIME_CONFIG: PrimeAdapterConfig = {
 };
 
 /**
- * Prime adapter implementation
+ * Prime adapter implementation using REAL core/prime module
  */
 export class PrimeAdapterImpl implements PrimeAdapter {
   private primeRegistry: any;
+  private realPrimeRegistry?: PrimeRegistryModel;
   private config: PrimeAdapterConfig;
   private bandConfigs = new Map<BandType, BandConfig>();
   private performanceCache = new Map<string, number>();
@@ -80,6 +81,26 @@ export class PrimeAdapterImpl implements PrimeAdapter {
   constructor(primeRegistry: any, config: Partial<PrimeAdapterConfig> = {}) {
     this.primeRegistry = primeRegistry;
     this.config = { ...DEFAULT_PRIME_CONFIG, ...config };
+    
+    // Initialize real prime registry if not provided
+    this.initializeRealPrimeRegistry().catch(console.error);
+  }
+  
+  /**
+   * Initialize REAL prime registry as fallback
+   */
+  private async initializeRealPrimeRegistry(): Promise<void> {
+    if (!this.realPrimeRegistry) {
+      try {
+        this.realPrimeRegistry = await createAndInitializePrimeRegistry({
+          preloadCount: 1000,
+          useStreaming: true,
+          enableLogs: false
+        });
+      } catch (error) {
+        console.warn('Failed to initialize real prime registry fallback:', error);
+      }
+    }
   }
   
   async factorInBand(number: bigint, band: BandType): Promise<any[]> {
@@ -396,13 +417,46 @@ export class PrimeAdapterImpl implements PrimeAdapter {
   }
   
   private async sieveBasedFactorization(number: bigint): Promise<any[]> {
-    // Placeholder for sieve-based factorization
-    // In a real implementation, this would use optimized sieve algorithms
-    return await this.directFactorization(number);
+    // Advanced sieve-based factorization for medium-sized numbers
+    const factors: any[] = [];
+    let n = number;
+    
+    // Use small prime sieve up to sqrt(n)
+    const limit = Number(this.getBitLength(n) < 32 ? n : BigInt(Math.floor(Math.sqrt(Number(n & 0xFFFFFFFFn)))));
+    const sieve = this.generateSieve(limit);
+    
+    for (const p of sieve) {
+      const prime = BigInt(p);
+      if (prime * prime > n) break;
+      
+      let count = 0;
+      while (n % prime === 0n) {
+        n /= prime;
+        count++;
+      }
+      if (count > 0) {
+        factors.push({ prime, exponent: count });
+      }
+    }
+    
+    if (n > 1n) {
+      factors.push({ prime: n, exponent: 1 });
+    }
+    
+    return factors;
   }
   
   private async deterministicPrimalityTest(number: bigint): Promise<boolean> {
-    // Simple deterministic test for small numbers
+    // Use REAL prime registry primality test instead of primitive modulo checks
+    if (this.realPrimeRegistry) {
+      try {
+        return this.realPrimeRegistry.isPrime(number);
+      } catch (error) {
+        console.warn('Real prime registry primality test failed, falling back to basic:', error);
+      }
+    }
+    
+    // Fallback to basic primality test only if real registry unavailable
     if (number < 2n) return false;
     if (number === 2n) return true;
     if (number % 2n === 0n) return false;
@@ -432,6 +486,31 @@ export class PrimeAdapterImpl implements PrimeAdapter {
   private getBitLength(number: bigint): number {
     if (number === 0n) return 1;
     return number.toString(2).length;
+  }
+  
+  private generateSieve(limit: number): number[] {
+    // Sieve of Eratosthenes implementation
+    if (limit < 2) return [];
+    
+    const sieve = new Array(limit + 1).fill(true);
+    sieve[0] = sieve[1] = false;
+    
+    for (let i = 2; i * i <= limit; i++) {
+      if (sieve[i]) {
+        for (let j = i * i; j <= limit; j += i) {
+          sieve[j] = false;
+        }
+      }
+    }
+    
+    const primes: number[] = [];
+    for (let i = 2; i <= limit; i++) {
+      if (sieve[i]) {
+        primes.push(i);
+      }
+    }
+    
+    return primes;
   }
   
   private hashData(data: any[]): string {

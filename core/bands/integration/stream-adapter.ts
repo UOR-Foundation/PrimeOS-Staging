@@ -308,48 +308,47 @@ export class StreamAdapterImpl implements StreamAdapter {
   }
   
   private getOptimalChunkSizeForBand(band: BandType): number {
-    const chunkSizes = {
-      [BandType.ULTRABASS]: 64,
-      [BandType.BASS]: 256,
-      [BandType.MIDRANGE]: 1024,
-      [BandType.UPPER_MID]: 4096,
-      [BandType.TREBLE]: 8192,
-      [BandType.SUPER_TREBLE]: 16384,
-      [BandType.ULTRASONIC_1]: 32768,
-      [BandType.ULTRASONIC_2]: 65536
+    const bitRange = getBitSizeForBand(band);
+    // Calculate optimal chunk size based on bit range and processing characteristics
+    const baseSize = Math.max(64, Math.floor((bitRange.min + bitRange.max) / 16));
+    
+    // Apply band-specific scaling factors for stream processing
+    const scalingFactors = {
+      [BandType.ULTRABASS]: 0.5,
+      [BandType.BASS]: 1.0,
+      [BandType.MIDRANGE]: 2.0,
+      [BandType.UPPER_MID]: 4.0,
+      [BandType.TREBLE]: 6.0,
+      [BandType.SUPER_TREBLE]: 8.0,
+      [BandType.ULTRASONIC_1]: 12.0,
+      [BandType.ULTRASONIC_2]: 16.0
     };
     
-    return chunkSizes[band];
+    return Math.floor(baseSize * scalingFactors[band]);
   }
   
   private getOptimalConcurrencyForBand(band: BandType): number {
-    const concurrencies = {
-      [BandType.ULTRABASS]: 1,
-      [BandType.BASS]: 1,
-      [BandType.MIDRANGE]: 2,
-      [BandType.UPPER_MID]: 2,
-      [BandType.TREBLE]: 4,
-      [BandType.SUPER_TREBLE]: 6,
-      [BandType.ULTRASONIC_1]: 8,
-      [BandType.ULTRASONIC_2]: 4 // Reduced for memory management
-    };
+    const acceleration = getExpectedAcceleration(band);
+    const bitRange = getBitSizeForBand(band);
     
-    return Math.min(concurrencies[band], this.config.maxConcurrency);
+    // Calculate concurrency based on acceleration factor and bit complexity
+    // Higher acceleration and larger bit ranges can handle more concurrency
+    const baseConcurrency = Math.max(1, Math.floor(acceleration / 2));
+    const complexityFactor = Math.log2(bitRange.max) / 10; // Scale complexity
+    const optimalConcurrency = Math.floor(baseConcurrency * (1 + complexityFactor));
+    
+    return Math.min(optimalConcurrency, this.config.maxConcurrency);
   }
   
   private getOptimalVolumeForBand(band: BandType): number {
-    const volumes = {
-      [BandType.ULTRABASS]: 100,
-      [BandType.BASS]: 500,
-      [BandType.MIDRANGE]: 2000,
-      [BandType.UPPER_MID]: 8000,
-      [BandType.TREBLE]: 20000,
-      [BandType.SUPER_TREBLE]: 50000,
-      [BandType.ULTRASONIC_1]: 100000,
-      [BandType.ULTRASONIC_2]: 200000
-    };
+    const bitRange = getBitSizeForBand(band);
+    const acceleration = getExpectedAcceleration(band);
     
-    return volumes[band];
+    // Calculate optimal volume based on bit range and expected acceleration
+    const baseVolume = Math.floor((bitRange.max - bitRange.min) * acceleration);
+    
+    // Apply minimum thresholds and scaling
+    return Math.max(100, baseVolume * 10);
   }
   
   // Stream creation methods
@@ -517,7 +516,27 @@ export class StreamAdapterImpl implements StreamAdapter {
   // Helper methods
   
   private async processItem(item: any): Promise<any> {
-    // Simple item processing - could be enhanced with band-specific logic
+    // Enhanced item processing with intelligent transformations
+    if (typeof item === 'string') {
+      // Optimize string processing for streaming
+      return item.trim().normalize('NFC');
+    } else if (typeof item === 'number') {
+      // Apply numerical optimization for stream processing
+      return Math.round(item * 10000) / 10000; // Maintain 4 decimal precision
+    } else if (typeof item === 'bigint') {
+      // Optimize bigint for efficient streaming
+      return item & ((1n << 128n) - 1n); // Ensure 128-bit bounds for streaming
+    } else if (Array.isArray(item)) {
+      // Process array items recursively
+      return await Promise.all(item.map(subItem => this.processItem(subItem)));
+    } else if (typeof item === 'object' && item !== null) {
+      // Optimize object structure for streaming
+      const optimized: any = {};
+      for (const [key, value] of Object.entries(item)) {
+        optimized[key] = await this.processItem(value);
+      }
+      return optimized;
+    }
     return item;
   }
   
@@ -553,18 +572,7 @@ export class StreamAdapterImpl implements StreamAdapter {
   }
   
   private getAccelerationFactor(band: BandType): number {
-    const factors = {
-      [BandType.ULTRABASS]: 1.2,
-      [BandType.BASS]: 1.5,
-      [BandType.MIDRANGE]: 2.5,
-      [BandType.UPPER_MID]: 3.5,
-      [BandType.TREBLE]: 5.0,
-      [BandType.SUPER_TREBLE]: 6.5,
-      [BandType.ULTRASONIC_1]: 7.0,
-      [BandType.ULTRASONIC_2]: 5.5
-    };
-    
-    return factors[band];
+    return getExpectedAcceleration(band);
   }
   
   private getDefaultMetrics(band: BandType): BandMetrics {

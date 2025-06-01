@@ -14,11 +14,34 @@ import {
   ProcessingResult
 } from '../types';
 
-// Re-export all adapters
-export { PrimeAdapter, createPrimeAdapter } from './prime-adapter';
-export { EncodingAdapter, createEncodingAdapter } from './encoding-adapter';
-export { StreamAdapter, createStreamAdapter } from './stream-adapter';
-export { PrecisionAdapter, createPrecisionAdapter } from './precision-adapter';
+import {
+  getBitSizeForBand,
+  getExpectedAcceleration
+} from '../utils/constants';
+
+// Import and re-export all adapters
+import { PrimeAdapter, createPrimeAdapter } from './prime-adapter';
+import { EncodingAdapter, createEncodingAdapter } from './encoding-adapter';
+import { StreamAdapter, createStreamAdapter } from './stream-adapter';
+import { PrecisionAdapter, createPrecisionAdapter } from './precision-adapter';
+
+// Import enhanced adapters
+import { EnhancedPrimeAdapter, createEnhancedPrimeAdapter } from './prime-adapter-enhanced';
+import { EnhancedEncodingAdapter, createEnhancedEncodingAdapter } from './encoding-adapter-enhanced';
+import { EnhancedStreamAdapter, createEnhancedStreamAdapter } from './stream-adapter-enhanced';
+import { EnhancedPrecisionAdapter, createEnhancedPrecisionAdapter } from './precision-adapter-enhanced';
+
+// Re-export for external use
+export { PrimeAdapter, createPrimeAdapter };
+export { EncodingAdapter, createEncodingAdapter };
+export { StreamAdapter, createStreamAdapter };
+export { PrecisionAdapter, createPrecisionAdapter };
+
+// Re-export enhanced adapters
+export { EnhancedPrimeAdapter, createEnhancedPrimeAdapter };
+export { EnhancedEncodingAdapter, createEnhancedEncodingAdapter };
+export { EnhancedStreamAdapter, createEnhancedStreamAdapter };
+export { EnhancedPrecisionAdapter, createEnhancedPrecisionAdapter };
 
 /**
  * Integration manager coordinates all adapters
@@ -182,21 +205,60 @@ export const IntegrationUtils = {
    * Detect optimal band for cross-module processing
    */
   detectOptimalBand(data: any[], moduleCapabilities: Map<string, BandType[]>): BandType {
-    // Simple majority voting for now
-    const bandVotes = new Map<BandType, number>();
+    // Advanced band selection using weighted scoring algorithm
+    const bandScores = new Map<BandType, number>();
     
+    // Initialize scores for all bands
+    const allBands = [BandType.ULTRABASS, BandType.BASS, BandType.MIDRANGE, 
+                     BandType.UPPER_MID, BandType.TREBLE, BandType.SUPER_TREBLE,
+                     BandType.ULTRASONIC_1, BandType.ULTRASONIC_2];
+    
+    for (const band of allBands) {
+      bandScores.set(band, 0);
+    }
+    
+    // Module capability alignment (40% weight)
     for (const capabilities of moduleCapabilities.values()) {
       for (const band of capabilities) {
-        bandVotes.set(band, (bandVotes.get(band) || 0) + 1);
+        bandScores.set(band, (bandScores.get(band) || 0) + 0.4);
       }
     }
     
-    let bestBand = BandType.MIDRANGE;
-    let maxVotes = 0;
+    // Data size optimization (30% weight)
+    const avgDataSize = data.length > 0 ? 
+      data.reduce((sum, item) => sum + (typeof item === 'string' ? item.length : 
+                                      typeof item === 'number' ? Math.abs(item) : 
+                                      JSON.stringify(item).length), 0) / data.length : 0;
     
-    for (const [band, votes] of bandVotes) {
-      if (votes > maxVotes) {
-        maxVotes = votes;
+    for (const band of allBands) {
+      const bitRange = getBitSizeForBand(band);
+      const dataBits = Math.log2(avgDataSize + 1);
+      const sizeScore = (dataBits >= bitRange.min && dataBits <= bitRange.max) ? 1.0 : 
+                       Math.max(0.1, 1.0 - Math.abs(dataBits - (bitRange.min + bitRange.max) / 2) / bitRange.max);
+      bandScores.set(band, (bandScores.get(band) || 0) + sizeScore * 0.3);
+    }
+    
+    // Expected acceleration (20% weight)
+    for (const band of allBands) {
+      const acceleration = getExpectedAcceleration(band);
+      const normalizedAccel = Math.min(acceleration / 10, 1);
+      bandScores.set(band, (bandScores.get(band) || 0) + normalizedAccel * 0.2);
+    }
+    
+    // Complexity alignment (10% weight)
+    const complexity = Math.min(data.length / 1000, 1.0);
+    for (const band of allBands) {
+      const complexityScore = 1.0 - Math.abs(complexity - (allBands.indexOf(band) / allBands.length));
+      bandScores.set(band, (bandScores.get(band) || 0) + complexityScore * 0.1);
+    }
+    
+    // Find highest scoring band
+    let bestBand = BandType.MIDRANGE;
+    let maxScore = -1;
+    
+    for (const [band, score] of bandScores) {
+      if (score > maxScore) {
+        maxScore = score;
         bestBand = band;
       }
     }
@@ -211,10 +273,21 @@ export const IntegrationUtils = {
     const successfulResults = results.filter(r => r.success);
     
     if (successfulResults.length === 0) {
+      const defaultMetrics: BandMetrics = {
+        throughput: 0, latency: 0, memoryUsage: 0, cacheHitRate: 0,
+        accelerationFactor: 0, errorRate: 1, primeGeneration: 0,
+        factorizationRate: 0, spectralEfficiency: 0, distributionBalance: 0,
+        precision: 0, stability: 0, convergence: 0
+      };
+      
+      const defaultQuality = { precision: 0, accuracy: 0, completeness: 0, consistency: 0, reliability: 0 };
+      
+      const firstResult = results.length > 0 ? results[0] : null;
+      
       return {
         success: false,
-        metrics: results[0]?.metrics || {} as BandMetrics,
-        quality: results[0]?.quality || { precision: 0, accuracy: 0, completeness: 0, consistency: 0, reliability: 0 },
+        metrics: (firstResult && firstResult.metrics) ? firstResult.metrics : defaultMetrics,
+        quality: (firstResult && firstResult.quality) ? firstResult.quality : defaultQuality,
         error: 'All module processing failed'
       };
     }

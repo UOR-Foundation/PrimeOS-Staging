@@ -67,10 +67,11 @@ const DEFAULT_PRECISION_CONFIG: PrecisionAdapterConfig = {
 };
 
 /**
- * Precision adapter implementation
+ * Precision adapter implementation using REAL core/precision module
  */
 export class PrecisionAdapterImpl implements PrecisionAdapter {
   private precisionModule: any;
+  private realPrecisionModule?: PrecisionInstance;
   private config: PrecisionAdapterConfig;
   private bandConfigs = new Map<BandType, BandConfig>();
   private performanceCache = new Map<string, number>();
@@ -79,6 +80,27 @@ export class PrecisionAdapterImpl implements PrecisionAdapter {
   constructor(precisionModule: any, config: Partial<PrecisionAdapterConfig> = {}) {
     this.precisionModule = precisionModule;
     this.config = { ...DEFAULT_PRECISION_CONFIG, ...config };
+    
+    // Initialize real precision module as fallback
+    this.initializeRealPrecisionModule().catch(console.error);
+  }
+  
+  /**
+   * Initialize REAL precision module as fallback
+   */
+  private async initializeRealPrecisionModule(): Promise<void> {
+    if (!this.realPrecisionModule) {
+      try {
+        this.realPrecisionModule = createPrecision({
+          enableCaching: this.config.enableCaching,
+          cacheSize: this.config.maxCacheSize,
+          useOptimized: true,
+          strict: true
+        });
+      } catch (error) {
+        console.warn('Failed to initialize real precision module fallback:', error);
+      }
+    }
   }
   
   async computeWithPrecision(operation: string, operands: any[], band: BandType): Promise<any> {
@@ -347,17 +369,47 @@ export class PrecisionAdapterImpl implements PrecisionAdapter {
   }
   
   private async performStandardComputation(operation: string, operands: any[]): Promise<any> {
-    // Fallback to standard precision module operations
+    // Try to use REAL precision module first
+    if (this.realPrecisionModule) {
+      try {
+        switch (operation) {
+          case 'gcd':
+            if (operands.length >= 2) {
+              return this.realPrecisionModule.MathUtilities.gcd(BigInt(operands[0]), BigInt(operands[1]));
+            }
+            break;
+          case 'lcm':
+            if (operands.length >= 2) {
+              return this.realPrecisionModule.MathUtilities.lcm(BigInt(operands[0]), BigInt(operands[1]));
+            }
+            break;
+          case 'modPow':
+            if (operands.length >= 3) {
+              return this.realPrecisionModule.MathUtilities.modPow(BigInt(operands[0]), BigInt(operands[1]), BigInt(operands[2]));
+            }
+            break;
+          case 'mod':
+            if (operands.length >= 2) {
+              return this.realPrecisionModule.MathUtilities.mod(BigInt(operands[0]), BigInt(operands[1]));
+            }
+            break;
+        }
+      } catch (error) {
+        console.warn('Real precision module operation failed, falling back:', error);
+      }
+    }
+    
+    // Fallback to provided precision module operations
     if (this.precisionModule && typeof this.precisionModule[operation] === 'function') {
       return await this.precisionModule[operation](...operands);
     }
     
-    // Basic operations if precision module doesn't have the specific operation
+    // Basic operations as last resort
     switch (operation) {
       case 'add':
-        return operands.reduce((a, b) => a + b, 0);
+        return operands.reduce((a, b) => Number(a) + Number(b), 0);
       case 'multiply':
-        return operands.reduce((a, b) => a * b, 1);
+        return operands.reduce((a, b) => Number(a) * Number(b), 1);
       case 'optimize':
         return operands[0]; // Return as-is for optimization
       default:
@@ -394,33 +446,28 @@ export class PrecisionAdapterImpl implements PrecisionAdapter {
   // Utility methods
   
   private getOptimalPrecisionForBand(band: BandType): number {
-    const precisions = {
-      [BandType.ULTRABASS]: 32,
-      [BandType.BASS]: 64,
-      [BandType.MIDRANGE]: 128,
-      [BandType.UPPER_MID]: 256,
-      [BandType.TREBLE]: 512,
-      [BandType.SUPER_TREBLE]: 1024,
-      [BandType.ULTRASONIC_1]: 2048,
-      [BandType.ULTRASONIC_2]: 4096
-    };
-    
-    return precisions[band];
+    const bitRange = getBitSizeForBand(band);
+    // Calculate precision based on the bit range requirements of the band
+    // Use the maximum bits for the band as the precision requirement
+    return Math.max(32, bitRange.max);
   }
   
   private getOptimalStrategyForBand(band: BandType): string {
-    const strategies = {
-      [BandType.ULTRABASS]: 'fast',
-      [BandType.BASS]: 'balanced',
-      [BandType.MIDRANGE]: 'balanced',
-      [BandType.UPPER_MID]: 'precise',
-      [BandType.TREBLE]: 'precise',
-      [BandType.SUPER_TREBLE]: 'maximum',
-      [BandType.ULTRASONIC_1]: 'maximum',
-      [BandType.ULTRASONIC_2]: 'adaptive'
-    };
+    const bitRange = getBitSizeForBand(band);
+    const complexity = (bitRange.max - bitRange.min) / bitRange.max;
     
-    return strategies[band];
+    // Determine strategy based on bit range complexity and band characteristics
+    if (bitRange.max <= 64) {
+      return 'fast'; // Small numbers, use fast algorithms
+    } else if (bitRange.max <= 256) {
+      return 'balanced'; // Medium numbers, balance speed and precision
+    } else if (bitRange.max <= 1024) {
+      return 'precise'; // Large numbers, prioritize precision
+    } else if (complexity > 0.5) {
+      return 'adaptive'; // High complexity ranges, use adaptive strategies
+    } else {
+      return 'maximum'; // Very large numbers, maximum precision
+    }
   }
   
   private createCacheKey(operation: string, operands: any[], band: BandType): string {
@@ -432,7 +479,9 @@ export class PrecisionAdapterImpl implements PrecisionAdapter {
     if (this.computationCache.size >= this.config.maxCacheSize) {
       // Simple LRU: remove oldest entry
       const firstKey = this.computationCache.keys().next().value;
-      this.computationCache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.computationCache.delete(firstKey);
+      }
     }
     this.computationCache.set(key, result);
   }
@@ -486,18 +535,7 @@ export class PrecisionAdapterImpl implements PrecisionAdapter {
   }
   
   private getAccelerationFactor(band: BandType): number {
-    const factors = {
-      [BandType.ULTRABASS]: 1.5,
-      [BandType.BASS]: 2.0,
-      [BandType.MIDRANGE]: 3.0,
-      [BandType.UPPER_MID]: 3.5,
-      [BandType.TREBLE]: 3.0,
-      [BandType.SUPER_TREBLE]: 2.5,
-      [BandType.ULTRASONIC_1]: 2.0,
-      [BandType.ULTRASONIC_2]: 1.8
-    };
-    
-    return factors[band];
+    return getExpectedAcceleration(band);
   }
   
   private getDefaultMetrics(band: BandType): BandMetrics {

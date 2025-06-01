@@ -125,23 +125,49 @@ export interface PerformanceMonitorConfig {
   benchmarkSuites: string[];
 }
 
+import {
+  BAND_CONSTANTS,
+  PERFORMANCE_CONSTANTS,
+  getBitSizeForBand,
+  getExpectedAcceleration
+} from '../utils/constants';
+
+/**
+ * Dynamic performance monitor configuration based on system capabilities
+ */
+function createDefaultMonitorConfig(): PerformanceMonitorConfig {
+  // Calculate optimal sampling interval based on system performance
+  const systemPerformance = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const baseSamplingInterval = Math.max(500, Math.min(2000, systemPerformance > 1000 ? 1000 : 2000));
+  
+  // Calculate optimal sample count based on available memory
+  const availableMemory = typeof process !== 'undefined' && process.memoryUsage ? 
+    process.memoryUsage().heapTotal : 128 * 1024 * 1024; // Default 128MB
+  const optimalSampleCount = Math.max(1000, Math.min(50000, Math.floor(availableMemory / (1024 * 8))));
+  
+  // Dynamic alert thresholds based on system characteristics
+  const alertThresholds = new Map([
+    [MeasurementType.LATENCY, Math.max(100, baseSamplingInterval * 2)],
+    [MeasurementType.MEMORY_USAGE, Math.floor(availableMemory * 0.8)],
+    [MeasurementType.ERROR_RATE, 0.02], // 2% error rate threshold
+    [MeasurementType.CPU_USAGE, 0.75] // 75% CPU usage threshold
+  ]);
+  
+  return {
+    samplingInterval: baseSamplingInterval,
+    maxSamples: optimalSampleCount,
+    alertThresholds,
+    enablePredictiveAnalysis: true,
+    enableAdaptiveOptimization: true,
+    optimizationInterval: baseSamplingInterval * 60, // 60x sampling interval
+    benchmarkSuites: ['lightweight', 'standard', 'comprehensive', 'stress']
+  };
+}
+
 /**
  * Default performance monitor configuration
  */
-const DEFAULT_MONITOR_CONFIG: PerformanceMonitorConfig = {
-  samplingInterval: 1000, // 1 second
-  maxSamples: 10000,
-  alertThresholds: new Map([
-    [MeasurementType.LATENCY, 1000], // 1 second
-    [MeasurementType.MEMORY_USAGE, 100 * 1024 * 1024], // 100MB
-    [MeasurementType.ERROR_RATE, 0.05], // 5%
-    [MeasurementType.CPU_USAGE, 0.8] // 80%
-  ]),
-  enablePredictiveAnalysis: true,
-  enableAdaptiveOptimization: true,
-  optimizationInterval: 60000, // 1 minute
-  benchmarkSuites: ['basic', 'stress', 'quality']
-};
+const DEFAULT_MONITOR_CONFIG: PerformanceMonitorConfig = createDefaultMonitorConfig();
 
 /**
  * Performance monitor implementation
@@ -151,8 +177,8 @@ export class BandPerformanceMonitor {
   private samples: Map<BandType, PerformanceSample[]> = new Map();
   private alerts: PerformanceAlert[] = [];
   private isMonitoring: boolean = false;
-  private monitoringInterval?: NodeJS.Timeout;
-  private optimizationInterval?: NodeJS.Timeout;
+  private monitoringInterval?: NodeJS.Timeout | undefined;
+  private optimizationInterval?: NodeJS.Timeout | undefined;
   private performanceTrends: Map<string, number[]> = new Map();
   
   constructor(config: Partial<PerformanceMonitorConfig> = {}) {
@@ -363,9 +389,10 @@ export class BandPerformanceMonitor {
     }
     
     const expectedImprovement = (bestScore - originalBenchmark.score) / originalBenchmark.score;
+    const finalBenchmark = benchmarkResults[benchmarkResults.length - 1];
     const recommendations = this.generateOptimizationRecommendations(
       originalBenchmark, 
-      benchmarkResults[benchmarkResults.length - 1]
+      finalBenchmark
     );
     
     return {
@@ -692,25 +719,36 @@ export class BandPerformanceMonitor {
     let weightSum = 0;
     
     // Weight different metrics
-    const weights = {
-      [MeasurementType.LATENCY]: 0.3,
-      [MeasurementType.THROUGHPUT]: 0.3,
+    const weights: Record<MeasurementType, number> = {
+      [MeasurementType.LATENCY]: 0.25,
+      [MeasurementType.THROUGHPUT]: 0.25,
       [MeasurementType.MEMORY_USAGE]: 0.2,
+      [MeasurementType.CPU_USAGE]: 0.1,
+      [MeasurementType.CACHE_HIT_RATE]: 0.05,
       [MeasurementType.ERROR_RATE]: 0.1,
-      [MeasurementType.QUALITY_SCORE]: 0.1
+      [MeasurementType.QUALITY_SCORE]: 0.05
     };
     
     for (const [type, stats] of statistics) {
-      const weight = weights[type] || 0;
-      if (weight > 0) {
+      const weight = weights[type];
+      if (weight && weight > 0) {
         let metricScore = 0;
         
         switch (type) {
           case MeasurementType.LATENCY:
             metricScore = Math.max(0, 1 - stats.mean / 1000); // Lower is better
             break;
+          case MeasurementType.THROUGHPUT:
+            metricScore = Math.min(1, stats.mean / 1000); // Higher is better
+            break;
           case MeasurementType.MEMORY_USAGE:
             metricScore = Math.max(0, 1 - stats.mean / (100 * 1024 * 1024)); // Lower is better
+            break;
+          case MeasurementType.CPU_USAGE:
+            metricScore = Math.max(0, 1 - stats.mean); // Lower is better
+            break;
+          case MeasurementType.CACHE_HIT_RATE:
+            metricScore = stats.mean; // Higher is better
             break;
           case MeasurementType.ERROR_RATE:
             metricScore = 1 - stats.mean; // Lower is better
